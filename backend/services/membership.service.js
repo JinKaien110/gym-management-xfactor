@@ -5,12 +5,14 @@ import { getChangedFields } from "../utils/getChangedFields.js";
 import PricingModel from "../models/PricingModel.js";
 import MembershipRequestModel from "../models/MembershipRequestModel.js";
 import { calculateEndDate } from "../utils/calculateEndDate.js";
+import PaymentModel from "../models/PaymentModel.js";
+import PaymentService from "./payment.service.js";
 
 dotenv.config();
 
 class MembershipService {
     async createMembershipRequest(user, body) {
-        let { member_id, plan_id, pricing_id} = body;
+        let { member_id, plan_id, pricing_id, type } = body;
         let creator = user.id;
 
         if(!member_id || !ObjectId.isValid(member_id)) {
@@ -28,6 +30,10 @@ class MembershipService {
         if(!pricing_id || !ObjectId.isValid(pricing_id)) {
             throw new Error("Invalid pricing ID");
         }
+        
+        if(!type) {
+            throw new Error("Request type is required");
+        }
 
         const pricing = await PricingModel.getPricing(new ObjectId(pricing_id));
 
@@ -40,6 +46,7 @@ class MembershipService {
             plan_id: new ObjectId(plan_id),
             pricing_id: new ObjectId(pricing_id),
             status: "pending",
+            type: type.trim().toLowerCase(),
             createdAt: new Date(),
             createdBy: new ObjectId(creator),
             updatedAt: new Date(),
@@ -91,6 +98,37 @@ class MembershipService {
         }
 
         return await MembershipModel.viewMembership(new ObjectId(id));
+    }
+
+    async viewAllMembership(query) {
+        let { start_date, end_date, status, is_frozen, search, page = 1, limit = 10} = query;
+
+        let filter = {};
+        page = Number(page);
+        limit = Number(limit);
+
+        if(start_date) {
+            filter.end_date = { $gte: new Date(start_date) }; 
+        }
+
+        if(end_date) {
+            filter.start_date = { $lte: new Date(end_date) }; 
+        }
+
+        if(status) {
+            filter.status = status.trim().toLowerCase()
+        }
+
+        if(is_frozen !== undefined) {
+            filter.is_frozen = is_frozen === "true" || is_frozen === true;
+        }
+
+
+        if(search) {
+            search = search.trim().toLowerCase()
+        }
+
+        return await MembershipModel.viewAllMembership(filter, search, page, limit);
     }
 
     async updateMembership(id, body, updater) {
@@ -177,73 +215,105 @@ class MembershipService {
     }
 
     async updateMembershipStatus(id, body, updater) {
-        if(!id || !ObjectId.isValid(id)) {
-            throw new Error("Invalid membership ID");
+        if (!id || !ObjectId.isValid(id)) {
+            throw new ValidationError("Invalid membership ID");
         }
 
         const membership = await MembershipModel.viewMembership(new ObjectId(id));
-
-        if(!membership) {
-            throw new Error("Membership not found");
+        if (!membership) {
+            throw new ValidationError("Membership not found");
         }
 
-        if(!body.member_id || !ObjectId.isValid(body.member_id)) {
-            throw new Error("Invalid member ID");
+        if (!body.member_id || !ObjectId.isValid(body.member_id)) {
+            throw new ValidationError("Invalid member ID");
         }
 
-        let status = body.status.trim().toLowerCase();
+        if (!updater.id || !ObjectId.isValid(updater.id)) {
+            throw new ValidationError("Invalid updater ID");
+        }
+
+        let status = String(body.status).trim().toLowerCase();
         let member_id = new ObjectId(body.member_id);
 
-        if(status) {
-            throw new Error("Missing status value");
+        if (!status) {
+            throw new ValidationError("Missing status value");
         }
 
         const allowedStatus = ["active", "cancelled", "archived"];
-
-        if(!allowedStatus.includes(status)) {
-            throw new Error("Invalid status value");
-        }
-
-        if(!updater.id || !ObjectId.isValid(updater.id)) {
-            throw new Error("Invalid updater ID");
+        if (!allowedStatus.includes(status)) {
+            throw new ValidationError("Invalid status value");
         }
 
         let updates = {
-            status: status,
+            status,
             updatedAt: new Date(),
             updatedBy: new ObjectId(updater.id)
         };
-        
-        if(status === "cancelled" && body.payment_method === "cash") {
-            const cancellationRequest = {
-                membership_id: new ObjectId(id),
-                member_id: member_id,
-                status: "completed",
-                amount: 5000,
+
+        const createMembershipRequest = async (statusValue) => {
+            const type = String(body.type || "").trim().toLowerCase();
+            const sanitizedRequest = {
+                member_id,
+                plan_id: new ObjectId(membership.plan_id),
+                pricing_id: new ObjectId(membership.pricing_id),
+                status: statusValue,
+                type,
                 createdAt: new Date(),
-                createdBy: new ObjectId(updater.id)
+                createdBy: new ObjectId(updater.id),
+                updatedAt: new Date(),
+                updatedBy: new ObjectId(updater.id)
+            };
+            return await MembershipRequestModel.createMembershipRequest(sanitizedRequest);
+        };
+
+        // Handle cancellation with payment
+        if (status === "cancelled") {
+            const payment_method = String(body.payment_method || "").trim().toLowerCase();
+
+            if (!payment_method) {
+                throw new ValidationError("Payment method is required for cancellation");
             }
-                
-            // await CancellationRequestModel.create(
-            //    cancellationRequest
-            // );
+
+            if (payment_method === "cash") {
+                const request = await createMembershipRequest("completed");
+
+                const external_id = `cash-membership=${membership._id}-${Date.now()}`;
+
+                await PaymentModel.createPayment({
+                    provider: "cash",
+                    external_id,
+                    amount: Number(body.amount),
+                    status: "PAID",
+                    payment_method: payment_method,
+                    membership_request_id: request._id,
+                    raw_response: null,
+                    createdAt: new Date(),
+                    createdBy: new ObjectId(updater.id),
+                    updatedAt: new Date(),
+                    updatedBy: new ObjectId(updater.id)
+                });
+
+            } else if (payment_method === "gcash") {
+                const request = await createMembershipRequest("pending");
+                await PaymentService.createGcashPayment(body, updater);
+
+            } else if (payment_method === "paymaya") {
+                const request = await createMembershipRequest("pending");
+                await PaymentService.createMayaPayment(body, updater);
+
+            } else {
+                throw new ValidationError("Invalid payment method");
+            }
         }
 
-        if(status === "cancelled" && body.payment_method === "gcash") {
-            
-        }
-
-        if(status === "archived") {
+        if (status === "archived") {
             updates.archivedAt = new Date();
             updates.archivedBy = new ObjectId(updater.id);
         }
 
-
-        return await MembershipModel.updateMembershipStatus(
-            new ObjectId(id),
-            updates
-        );
+        return await MembershipModel.updateMembershipStatus(new ObjectId(id), updates);
     }
+
 
     async freezeMembership(id, updater) {
         if(!id || !ObjectId.isValid(id)) {

@@ -10,6 +10,7 @@ import AdminRoutes from "./routes/adminroutes.js";
 import TrainerRoutes from "./routes/trainerroutes.js";
 import MembershipRoutes from "./routes/membershiproutes.js";
 import PaymentRoutes from "./routes/paymentroutes.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
 const app = express();
@@ -28,6 +29,8 @@ app.use('/api',  AdminRoutes);
 app.use('/api', TrainerRoutes);
 app.use('/api', MembershipRoutes);
 app.use('/api', PaymentRoutes);
+
+app.use(errorHandler)
 
 const PORT = process.env.PORT || 3000;
 

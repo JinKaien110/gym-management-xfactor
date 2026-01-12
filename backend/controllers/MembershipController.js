@@ -32,6 +32,17 @@ class MembershipController {
         }
     }
 
+    async viewAllMembership(req, res, next) {
+        try {
+            const result = await MembershipService.viewAllMembership(req.query);
+
+            return res.status(200).json(result);
+        } catch (error) {
+            debuggerLog("viewMembership Controller: ", error);
+            next(error)
+        }
+    }
+
     async updateMembership(req, res) {
         try {
             const result = await MembershipService.updateMembership(req.params.id, req.body, req.user);

@@ -2,15 +2,25 @@ import PaymentService from "../services/payment.service.js";
 import { debuggerLog } from "../utils/debuggerLog.js";
 
 class PaymentController {
-    async createMembershipPayment(req, res) {
+    async createMembershipPayment(req, res, next) {
         try {
 
-            const result = await PaymentService.createGcashPayment(req.body, req.user);
+            let result;
 
-            return res.status(201).json({ message: "Gcash payment created", checkout_url: result.checkout_url});
+            if(req.payment_method === "paymaya") {
+                result = await PaymentService.createMayaPayment(req.body, req.user);
+            } else if(req.payment_method === "gcash") {
+                result = await PaymentService.createGcashPayment(req.body, req.user)
+            } else if(req.payment_method === "cash") {
+                throw new Error("Contact staff in the facility");
+            } else {
+                return res.status(400).json({ message: "Invalid payment"});
+            }
+
+            return res.status(201).json({ message: "Successfully payment created", checkout_url: result.checkout_url});
         } catch (error) {
             debuggerLog("createMembershipPayment Controller" + error);
-            return res.status(500).json({ message: "Server Error", error: error.message,  });
+            next(error)
         }
     }
 
@@ -38,6 +48,29 @@ class PaymentController {
             return res.status(500).send("Webhook error");
         }
     }
+
+    async getAllPayment(req, res, next) {
+        try {
+            const result = await PaymentService.getAllPayment(req.query);
+
+            return res.status(200).json(result);
+        } catch (error) {
+            debuggerLog("getAllPayment Controller" + error.message);
+            next(error)
+        }
+    }
+
+    async getPaymentDetails(req, res, next) {
+        try {
+            const result = await PaymentService.getPaymentDetails(req.params.id);
+
+            return res.status(200).json(result);
+        } catch (error) {
+            debuggerLog("getAllPayment Controller" + error.message);
+            next(error)
+        }
+    }
+    
 }
 
 export default new PaymentController();
