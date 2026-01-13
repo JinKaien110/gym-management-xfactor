@@ -6,6 +6,7 @@ import { verifyXenditWebhook } from "../middleware/verifyXenditWebhook.js";
 const router = express.Router();
 
 router.post("/payments/gcash", verifyToken, authorizeRoles("admin", "staff", "member"), PaymentController.createMembershipPayment);
+router.post("/payments/paymaya", verifyToken, authorizeRoles("admin", "staff", "member"), PaymentController.createMembershipPayment);
 
 router.post("/webhooks/xendit", verifyXenditWebhook,PaymentController.xenditWebhook);
 

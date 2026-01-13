@@ -7,6 +7,7 @@ import MembershipRequestModel from "../models/MembershipRequestModel.js";
 import { calculateEndDate } from "../utils/calculateEndDate.js";
 import PaymentModel from "../models/PaymentModel.js";
 import PaymentService from "./payment.service.js";
+import { ValidationError } from "../errors/ValidationError.js";
 
 dotenv.config();
 
@@ -79,7 +80,8 @@ class MembershipService {
             end_date: endDate,
             status: "active",
             is_frozen: false,
-            frozenAt: null,
+            frozen_from: null,
+            frozen_til: null,
             frozenBy: null,
             unfrozenAt: null,
             createdAt: new Date(),
@@ -150,23 +152,54 @@ class MembershipService {
 
         if(!updater.id || !ObjectId.isValid(updater.id)) {
             throw new Error("Invalid updater ID");
+        }  
+        let startDate
+        if(body.start_date) {
+            startDate = new Date(body.start_date)
+        }
+        
+        let endDate
+        if(body.end_date) {
+            endDate = new Date(body.end_date)
         }
 
-        if(body.start_date && Number.isNaN(body.start_date.getTime())) {
+        if(startDate && Number.isNaN(startDate.getTime())) {
             throw new Error("Invalid start date format")
         }
 
-        if(body.end_date && Number.isNaN(body.end_date.getTime())) {
+        if(endDate && Number.isNaN(endDate.getTime())) {
             throw new Error("Invalid end date format")
         }
-
+        
         const exisitngMembership = await MembershipModel.viewMembership(new ObjectId(id));
-
+        
         if(!exisitngMembership) {
             throw new Error("Membership not found");
         }
 
         const updateData = {};
+
+        if(!endDate && startDate) {
+            const durationDays = await PricingModel.getPricing(exisitngMembership.pricing_id);
+            
+            updateData.end_date = new Date(startDate.getTime() + durationDays.duration_days * 24 * 60 * 60 * 1000);
+        }
+
+        if(endDate && !startDate) {
+            const durationDays = await PricingModel.getPricing(exisitngMembership.pricing_id);
+            
+            updateData.end_date = new Date(startDate.getTime() - durationDays.duration_days * 24 * 60 * 60 * 1000);
+        }
+
+        if(endDate && startDate) {
+            const pricing = await PricingModel.getPricing(exisitngMembership.pricing_id);
+            const diffInDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+
+            if(diffInDays !== pricing.duration_days) {
+                throw new ValidationError(`Start date and End date should be ${pricing.duration_days} days apart`);
+            }
+        }
+
         let allowedFields;
 
         if(updater.role === "staff") {
@@ -192,25 +225,24 @@ class MembershipService {
         for (const key of allowedFields) {
             const value = body[key];
             if (value !== undefined) {
-                if (value[key] === "plan_id" || value[key] === "pricing_id" || value[key] === "member_id") {
-                    updateData[key] = new ObjectId(value[key]);
-                } else if (value[key] === "start_date" || value[key] === "end_date") {
-                    updateData[key] = new Date(value[key]);
+                if (key === "plan_id" || key === "pricing_id" || key === "member_id") {
+                    updateData[key] = new ObjectId(value);
+                } else if (key === "start_date" || key === "end_date" || endDate) {
+                    updateData[key] = new Date(value);
                 }
             }
         }
 
-
         const updates = getChangedFields(exisitngMembership, updateData);
 
         if(Object.keys(updates).length) {
-            updates.updatedAt = new Date()
-            updates.updatedBy = new ObjectId(updater.id)
+            updateData.updatedAt = new Date()
+            updateData.updatedBy = new ObjectId(updater.id)
         }
 
         return await MembershipModel.updateMembership(
             new ObjectId(id),
-            updates
+            updateData
         );
     }
 
@@ -219,7 +251,7 @@ class MembershipService {
             throw new ValidationError("Invalid membership ID");
         }
 
-        const membership = await MembershipModel.viewMembership(new ObjectId(id));
+        let membership = await MembershipModel.viewMembership(new ObjectId(id));
         if (!membership) {
             throw new ValidationError("Membership not found");
         }
@@ -240,6 +272,7 @@ class MembershipService {
         }
 
         const allowedStatus = ["active", "cancelled", "archived"];
+
         if (!allowedStatus.includes(status)) {
             throw new ValidationError("Invalid status value");
         }
@@ -251,7 +284,7 @@ class MembershipService {
         };
 
         const createMembershipRequest = async (statusValue) => {
-            const type = String(body.type || "").trim().toLowerCase();
+            const type = String(body.type || null).trim().toLowerCase();
             const sanitizedRequest = {
                 member_id,
                 plan_id: new ObjectId(membership.plan_id),
@@ -266,13 +299,23 @@ class MembershipService {
             return await MembershipRequestModel.createMembershipRequest(sanitizedRequest);
         };
 
-        // Handle cancellation with payment
+        let redirect;
+
         if (status === "cancelled") {
-            const payment_method = String(body.payment_method || "").trim().toLowerCase();
+            const payment_method = String(body.payment_method || null).trim().toLowerCase();
 
             if (!payment_method) {
                 throw new ValidationError("Payment method is required for cancellation");
             }
+
+            let requestData = {
+                plan_id: new ObjectId(membership.plan_id),
+                pricing_id: new ObjectId(membership.pricing_id),
+                ...body
+            };
+
+
+
 
             if (payment_method === "cash") {
                 const request = await createMembershipRequest("completed");
@@ -294,12 +337,17 @@ class MembershipService {
                 });
 
             } else if (payment_method === "gcash") {
-                const request = await createMembershipRequest("pending");
-                await PaymentService.createGcashPayment(body, updater);
+                const request = await this.createMembershipRequest(updater, requestData);
+
+                requestData.membership_request_id = request.insertedId;
+
+                redirect = await PaymentService.createGcashPayment(requestData, updater);
 
             } else if (payment_method === "paymaya") {
-                const request = await createMembershipRequest("pending");
-                await PaymentService.createMayaPayment(body, updater);
+                const request = await this.createMembershipRequest(updater, requestData);
+
+                requestData.membership_request_id = request._id;
+                redirect = await PaymentService.createMayaPayment(requestData, updater);
 
             } else {
                 throw new ValidationError("Invalid payment method");
@@ -311,11 +359,17 @@ class MembershipService {
             updates.archivedBy = new ObjectId(updater.id);
         }
 
-        return await MembershipModel.updateMembershipStatus(new ObjectId(id), updates);
+        const updated = await MembershipModel.updateMembershipStatus(new ObjectId(id), updates);
+
+        return  {
+            redirect: redirect.checkout_url, 
+            external_id: redirect.external_id,
+            updated: updated
+        }
     }
 
 
-    async freezeMembership(id, updater) {
+    async freezeMembership(id, body, updater) {
         if(!id || !ObjectId.isValid(id)) {
             throw new Error("Invalid membership ID");
         }
@@ -338,8 +392,42 @@ class MembershipService {
             throw new Error("Invalid updater ID");
         }
 
+        const price = await PricingModel.getPricing(new ObjectId(membership.pricing_id));
+
+        if(price.duration_days < 180) {
+            throw new ValidationError("Member must be in 6 months to 1 year plan membership");
+        }
+
+        let startDate = body.start_date ? new Date(body.start_date) : new Date();
+        let endDate = body.end_date ? new Date(body.end_date) : null;
+        if(body.start_date) {
+            startDate = new Date(body.start_date)
+        }
+
+        if(body.end_date) {
+            endDate = new Date(body.end_date)
+        }
+
+        if(startDate && Number.isNaN(startDate.getTime())) {
+            throw new ValidationError("Invalid start date format")
+        }
+
+        if(endDate && Number.isNaN(endDate.getTime())) {
+            throw new ValidationError("Invalid end date format")
+        }
+
+        if(!endDate) {
+            endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+        } 
+
+        const freezeDays = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+        if(freezeDays < 30) throw new ValidationError("Minimum freeze is 1 month");
+        if(freezeDays > 90) throw new ValidationError("Minimum freeze is 1 month");
+
         const data = {
             is_frozen: true,
+            frozen_from: startDate || new Date(),
+            frozen_til: endDate, 
             frozenAt: new Date(),
             frozenBy: new ObjectId(updater.id),
             updatedAt: new Date(),
@@ -375,6 +463,8 @@ class MembershipService {
             is_frozen: false,
             frozenAt: null,
             frozenBy: null,
+            frozen_from: null,
+            frozen_til: null, 
             unfrozenAt: new Date(),
             updatedAt: new Date(),
             updatedBy: new ObjectId(updater.id)

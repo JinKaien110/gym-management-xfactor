@@ -102,7 +102,8 @@ class PaymentService {
     }
 
     async createMayaPayment(body, updater) {
-        let { membership_request_id, amount, payment_method } = body;
+        try {
+            let { membership_request_id, amount, payment_method } = body;
 
         if(!membership_request_id || !ObjectId.isValid(membership_request_id)) {
             throw new Error("Invalid membership request ID");
@@ -140,26 +141,28 @@ class PaymentService {
         }
 
         const external_id = `membership=${id}-${Date.now()}`;
+        console.log(amount)
 
         const payload = {
             reference_id: external_id,
             currency: "PHP",
-            amount: amount,
-            checkout_method: "REDIRECT",
+            amount,
+            checkout_method: "ONE_TIME_PAYMENT",
             channel_code: "PH_PAYMAYA",
             channel_properties: {
                 success_redirect_url: "https://localhost:3000/payment/success",
                 failure_redirect_url: "https://localhost:3000/payment/failed",
+                cancel_redirect_url: "https://localhost:3000/payment/cancel"
             },
             metadata: {
-                membership_request_id: id,
-                givenNames: updater.first_name,
-                surname: updater.last_name,
-                email: updater.email
+                givenNames: updater.first_name || memberDetails.first_name,
+                surname: updater.last_name || memberDetails.last_name,
+                email: updater.email || memberDetails.email
             }
         }
 
         const response = await axiosInstance.post("/ewallets/charges", payload);
+
         
         await PaymentModel.createPayment({
             member_id: new ObjectId(memberDetails._id),
@@ -184,6 +187,9 @@ class PaymentService {
             external_id
         }
 
+        } catch (error) {
+            console.log("Xendit error:", error.response.data);
+        }
     }
 
     async markPaymentPaid(id, payload) {
@@ -197,8 +203,6 @@ class PaymentService {
 
         if (payment.status === "PAID") return;
 
-        await MembershipService.createMembership(payment.membership_request_id);
-
         const updateStatus = "completed";
 
         await MembershipRequestModel.updateMembershipStatus(new ObjectId(payment.membership_request_id), updateStatus)
@@ -209,6 +213,7 @@ class PaymentService {
             updatedAt: new Date(),
             updatedBy: "xendit-webhook"
         });
+
     }
 
     async markPaymentFailed(id, payload) {

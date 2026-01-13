@@ -7,11 +7,11 @@ class PaymentController {
 
             let result;
 
-            if(req.payment_method === "paymaya") {
+            if(req.body.payment_method === "paymaya") {
                 result = await PaymentService.createMayaPayment(req.body, req.user);
-            } else if(req.payment_method === "gcash") {
+            } else if(req.body.payment_method === "gcash") {
                 result = await PaymentService.createGcashPayment(req.body, req.user)
-            } else if(req.payment_method === "cash") {
+            } else if(req.body.payment_method === "cash") {
                 throw new Error("Contact staff in the facility");
             } else {
                 return res.status(400).json({ message: "Invalid payment"});
@@ -19,7 +19,7 @@ class PaymentController {
 
             return res.status(201).json({ message: "Successfully payment created", checkout_url: result.checkout_url});
         } catch (error) {
-            debuggerLog("createMembershipPayment Controller" + error);
+            debuggerLog("createMembershipPayment Controller" + error.data);
             next(error)
         }
     }
@@ -27,6 +27,8 @@ class PaymentController {
     async xenditWebhook(req, res) {
         try {
             const event = req.body;
+            console.log("Reference ID:", event.data.reference_id, typeof event.data.reference_id);
+
             
             if(event.event === "ewallet.capture" && event.data.status === "SUCCEEDED") {
                 await PaymentService.markPaymentPaid(
