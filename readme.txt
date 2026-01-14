@@ -909,3 +909,77 @@ Admin updates a plan/price → directly applied
 Same controller & model can be used for both
 
 So the difference is not the DB operation, it’s the business rule applied before the DB operation.
+
+Yep — with **R (repeatable)**, you should keep **Classes + ClassSchedules + Bookings**, and still allow **custom one-off schedules**. The trick is:
+
+✅ **`class_id` is optional** on the schedule.
+
+So a schedule can be either:
+
+* **Template-based** (normal): `class_id` is set ✅
+* **Custom one-off**: `class_id` is null + you provide `custom_title`/`custom_description` ✅
+
+### Recommended rule (simple)
+
+* If `class_id` exists → use the class template details (name/duration defaults)
+* If `class_id` is missing → require `title` (and optional description) on the schedule
+
+---
+
+## Minimal data design (easy to implement)
+
+### `classes` (template)
+
+* `_id`
+* `name`
+* `duration_minutes`
+* `default_capacity`
+* `status` (active/inactive)
+
+### `class_schedules` (instance)
+
+* `_id`
+* `class_id` **nullable**
+* `title` (required if no class_id)
+* `start_at`, `end_at` (or `start_at + duration_minutes`)
+* `capacity`
+* `status` (open/closed/cancelled)
+* `createdBy`, `createdAt`
+
+### `bookings`
+
+* `_id`
+* `schedule_id`
+* `member_id`
+* `status` (joined/cancelled)
+* timestamps
+
+---
+
+## The “3 APIs” in the right order
+
+1. **Classes API** (so you can create templates)
+
+* `POST /classes`
+* `GET /classes`
+
+2. **Class Schedules API** (admin creates schedules)
+
+* `POST /class-schedules`
+* `GET /class-schedules` (list for members)
+
+3. **Bookings API** (member clicks Join)
+
+* `POST /bookings` (join schedule)
+* `DELETE` or `PATCH /bookings/:id` (cancel)
+
+---
+
+## One check (so we implement correctly)
+
+When schedule is template-based, do you want `end_at` to be:
+**1)** computed from class duration automatically
+or
+**2)** manually set by admin?
+
+Reply **1 or 2**.
