@@ -8,7 +8,7 @@ class ClassController {
 
             return res.status(201).json({ message: "Successfully create a class", result});
         } catch (error) {
-            debuggerLog("", error)
+            debuggerLog("Server Error: ", error)
             next(error)
         }
     }
@@ -19,7 +19,7 @@ class ClassController {
 
             return res.status(201).json(result);
         } catch (error) {
-            debuggerLog("", error)
+            debuggerLog("Server Error: ", error)
             next(error)
         }
     }
@@ -30,7 +30,7 @@ class ClassController {
 
             return res.status(201).json(result);
         } catch (error) {
-            debuggerLog("", error)
+            debuggerLog("Server Error: ", error)
             next(error)
         }
     }
@@ -41,7 +41,7 @@ class ClassController {
 
             return res.status(201).json({ message: "Successfully update a class", result});
         } catch (error) {
-            debuggerLog("", error)
+            debuggerLog("Server Error: ", error)
             next(error)
         }
     }
@@ -52,7 +52,7 @@ class ClassController {
 
             return res.status(201).json({ message: "Successfully update a class status", result});
         } catch (error) {
-            debuggerLog("", error)
+            debuggerLog("Server Error: ", error)
             next(error)
         }
     }
