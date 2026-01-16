@@ -15,7 +15,7 @@ class BookingController {
 
     async viewMyBookings(req, res, next) {
         try {
-            const result = await BookingService.joinBooking(req.params.id);
+            const result = await BookingService.joinBooking(req.user.id);
 
             return res.status(200).json(result);
         } catch (error) {
@@ -24,8 +24,15 @@ class BookingController {
         }
     }
 
-    async viewBookingDetails() {
-        
+    async viewBookingDetails(req, res, next) {
+        try {
+            const result = await BookingService.viewBookingDetails(req.params.id);
+
+            return res.status(200).json(result);
+        } catch (error) {
+            debuggerLog("Server Error: ", error)
+            next(error)
+        }
     }
 
     async viewAllBooking(req, res, next) {
@@ -41,7 +48,7 @@ class BookingController {
 
     async cancelBooking(req, res, next) {
         try {
-            const result = await BookingService.joinBooking(req.params.id, req.user);
+            const result = await BookingService.joinBooking(req.params.id, req.body, req.user);
 
             return res.status(200).json({ message: "Successfully cancel a class schedule", result});
         } catch (error) {
