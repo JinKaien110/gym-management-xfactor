@@ -45,7 +45,10 @@ class MemberManagementModel {
             throw new Error("Failed to create the user");
         }
 
-        return member;
+        return {
+            _id: member.insertedId,
+            ...data
+        };
     }
 
     async listMembers(filter, search, page, limit) {
@@ -219,13 +222,10 @@ class MemberManagementModel {
 
         const session = db.client.startSession();
 
-        try {
-            await session.withTransaction(async () => {
-
-                const trainer = await db.collection("trainers").findOne(
+       
+        const trainer = await db.collection("trainers").findOne(
                     { _id: trainer_id },
-                    { projection: { password: 0 } },
-                    { session }
+                    { projection: { password: 0 } }
                 );
 
                 if(!trainer) {
@@ -250,8 +250,7 @@ class MemberManagementModel {
                             updatedAt: new Date(),
                             updatedBy: adminId
                         }
-                    },
-                    { session }
+                    }
                 );
 
                 const trainerUpdate = await db.collection("trainers").updateOne(
@@ -262,8 +261,7 @@ class MemberManagementModel {
                             updatedAt: new Date(),
                             updatedBy: adminId
                         }
-                    },
-                    { session }
+                    }
                 );
 
                 if(!memberUpdate.matchedCount) {
@@ -274,14 +272,8 @@ class MemberManagementModel {
                     throw new Error("Failed to process trainerUpdate");
                 }
                 
-            });
 
-            return { success: true }
-        } catch (error) {
-            throw new Error("Failed to assigned trainer: " + error.message);
-        } finally {
-            await session.endSession();
-        }
+            return { memberUpdate, trainerUpdate }
     }
 }
 

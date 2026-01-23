@@ -10,7 +10,9 @@ import AdminRoutes from "./routes/adminroutes.js";
 import TrainerRoutes from "./routes/trainerroutes.js";
 import MembershipRoutes from "./routes/membershiproutes.js";
 import PaymentRoutes from "./routes/paymentroutes.js";
+import AIRoutes from "./routes/airoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { auditMeta } from "./middleware/auditMeta.js";
 
 dotenv.config();
 const app = express();
@@ -22,6 +24,7 @@ app.use(cors({
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(auditMeta)
 
 app.use('/api', AuthRoutes);
 app.use('/api',  MemberRoutes);
@@ -29,8 +32,11 @@ app.use('/api',  AdminRoutes);
 app.use('/api', TrainerRoutes);
 app.use('/api', MembershipRoutes);
 app.use('/api', PaymentRoutes);
+app.use('/api', AIRoutes);
+
 
 app.use(errorHandler)
+
 
 const PORT = process.env.PORT || 3000;
 

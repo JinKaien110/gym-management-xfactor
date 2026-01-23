@@ -51,8 +51,7 @@ export function validateAndNormalizeInputs(body) {
         ? fitness_goal.map(f => String(f).trim().toLowerCase()).filter(Boolean) 
         : [String(fitness_goal).trim().toLowerCase()];
         
-        const trainingType = training_type
-        ? (Array.isArray(training_type) ? training_type.map(t => String(t).trim().toLowerCase()) : [String(training_type).trim().toLowerCase()]) : [];
+        const trainingType = training_type ? String(training_type).trim().toLowerCase() : "resistanace"
 
         const medicalConditions = medical_condition 
         ? (Array.isArray(medical_condition) ? medical_condition.map(m => String(m).trim().toLowerCase()) : [String(medical_condition).trim().toLowerCase()]) : [];
@@ -74,7 +73,7 @@ export function validateAndNormalizeInputs(body) {
             throw new ValidationError("Invalid height")
         } 
 
-        if(weightKg !== null && weighKg <= 0) {
+        if(weightKg !== null && weightKg <= 0) {
             throw new ValidationError("Invalid weight")
         } 
 
@@ -85,17 +84,17 @@ export function validateAndNormalizeInputs(body) {
         return {
             member_id: new ObjectId(member_id),
             input: {
-                fitness_goal: goals,
+                goals: goals,
                 experience_level: String(experience_level).toLowerCase(),
                 days_per_week: dpw,
                 session_minutes: mins,
-                training_type: trainingType ? String(trainingType).toLowerCase() : "resistance",
-                medical_condition: medicalConditions,
+                training_type: trainingType,
+                limitations: medicalConditions,
                 personal_profile: {
                     age,
                     gender: gender ? String(gender).toLowerCase() : "male",
-                    height: heightCm,
-                    weight: weightKg,
+                    height_cm: heightCm,
+                    weight_kg: weightKg,
                     bmi: bmiVal
                 },
                 notes: notes ? String(notes).trim() : ""

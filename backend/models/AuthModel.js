@@ -18,9 +18,8 @@ class AuthModel {
         return user;
     }
 
-    async ValidatePassword(UserEmail, InputPassword) {
-        const User = await this.FindUserByEmail(UserEmail);
-        return await bcrypt.compare(InputPassword, User.password);
+    async ValidatePassword(InputPassword, UserEmail) {
+        return await bcrypt.compare(InputPassword, UserEmail);
     }
 
 }

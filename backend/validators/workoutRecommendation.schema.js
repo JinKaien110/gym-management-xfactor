@@ -10,9 +10,9 @@ export const WorkoutRecommendationSchema = z.object({
             exercises: z.array(
                 z.object({
                     name: z.string(),
-                    sets: z.number().int().positive(),
+                    sets: z.coerce.number().int().positive(),
                     reps: z.string(),
-                    rest_sec: z.number().int().nonnegative(),
+                    rest_sec: z.coerce.number().int().nonnegative(),
                     notes: z.string().optional().default(""),
                 })
             ),
@@ -22,5 +22,5 @@ export const WorkoutRecommendationSchema = z.object({
     ),
     progression: z.string(),
     safety_notes: z.array(z.string()),
-    estimated_difficulty: z.string()
+    estimated_difficulty: z.enum(["easy", "moderate", "hard"])
 })

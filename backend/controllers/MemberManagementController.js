@@ -5,43 +5,59 @@ import MemberManagementModel from "../models/MemberManagementModel.js";
 import { hashedPassword } from "../utils/hashedPassword.js";
 import { getChangedFields } from "../utils/getChangedFields.js";
 import checkDuplicate from "../utils/checkDuplicate.js";
+import AuditLogsService from "../services/audit.logs.service.js";
+import { sendEmail } from "../services/email.service.js";
+import { memberRegisteredEmail } from "../templates/memberRegisteredEmail.js";
 dotenv.config();
 
 class MemberManagementController {
     async createMember(req, res) {
         try {
-            const { first_name, last_name, email, phone, password, role } = req.body;
+            const { first_name, last_name, email, phone, password } = req.body;
             const createdBy = req.user.id;
 
-            if(!first_name || !last_name || !email || !phone || !password ) {
-                return res.status(400).json({ message: "Please fill out the necessary fields"});
+
+            if (!first_name || !last_name || !email || !phone || !password) {
+            return res.status(400).json({ message: "Please fill out the necessary fields" });
             }
 
-            if(req.user.role !== "admin") {
-                return res.status(403).json({ message: "Invalid authentication role"});
+            if (req.user.role !== "admin") {
+            return res.status(403).json({ message: "Invalid authentication role" });
+            }
+
+            if (!createdBy || !ObjectId.isValid(createdBy)) {
+            return res.status(400).json({ message: "Invalid admin ID" });
             }
 
             const doesExist = await MemberManagementModel.findUserByEmail(email.trim().toLowerCase());
-
-            if(doesExist) {
-                return res.status(400).json({ message: "User already exist"});
+            if (doesExist) {
+            return res.status(400).json({ message: "User already exists" });
             }
 
-            if(!createdBy || !ObjectId.isValid(createdBy)) {
-                return res.status(400).json({ message: "Invalid admin ID"});
-            }
+            const actor = { id: new ObjectId(createdBy), role: req.user.role };
 
-            const hashpassword = await hashedPassword(password);
+            const member = await AuditLogsService.auditWrap({
+            action: "CREATE_MEMBER",
+            entity: "members",
+            actor,
+            meta: req.auditMeta,
+            summary: `Member created by ${req.user.first_name} ${req.user.last_name}`,
+            changes: { patch: { email: email.trim().toLowerCase() } },
 
-            const sanitized = {
+            fn: async () => {
+                const hashpassword = await hashedPassword(password);
+
+                const sanitized = {
                 first_name: first_name.trim(),
                 last_name: last_name.trim(),
                 email: email.trim().toLowerCase(),
                 phone: phone.trim(),
                 address: null,
                 password: hashpassword,
+
                 role: "member",
-                status: "active",
+                status: "pending",
+
                 member_type: null,
                 gender: null,
                 date_of_birth: null,
@@ -51,29 +67,59 @@ class MemberManagementController {
                 fitness_goal: null,
                 training_type: null,
                 medical_condition: null,
-                experience_level: null, 
+                experience_level: null,
                 days_per_week: null,
                 session_minutes: null,
+
                 trainer_id: null,
                 qr_code: null,
+
                 emergency_name: null,
                 emergency_contact: null,
                 emergency_relationship: null,
+
                 createdAt: new Date(),
                 createdBy: new ObjectId(createdBy),
-                updatedAt: new Date(),
-                updatedBy: new ObjectId(createdBy),
+                updatedAt: null,
+                updatedBy: null,
+
                 archivedAt: null,
-                archivedBy: null
-            }
+                archivedBy: null,
+                };
 
-            const member = await MemberManagementModel.createMember(sanitized)
 
-            return res.status(201).json({ message: "Successfully created the user", userId: member.insertedId});
+                return await MemberManagementModel.createMember(sanitized);
+            },
+            });
+
+            await AuditLogsService.auditWrap({
+                action: "EMAIL_MEMBER_REGISTRATION",
+                entity: "members",
+                entity_id: member._id ?? null,
+                actor,
+                meta: req.auditMeta,
+                summary: `Member was sent a welcome email `,
+                changes: { patch: { email: email.trim().toLowerCase() } },
+
+                fn: async () => {
+                    await sendEmail({
+                        to: member.email,
+                        subject: "Welcome to XFactor Fitness Gym",
+                        html: memberRegisteredEmail(member)
+                    });
+                }
+            })
+           
+
+            return res.status(201).json({
+            message: "Successfully created the user",
+            userId: member._id,             
+            data: member,                     
+            });
 
         } catch (error) {
-            debuggerLog("createMember Model: ", error);
-            return res.status(500).json({ message: "Server Error", error});
+            debuggerLog("createMember Controller: ", error);
+            return res.status(500).json({ message: "Server Error", error });
         }
     }
 
@@ -146,7 +192,7 @@ class MemberManagementController {
     async updateMemberProfile(req, res) {
         try {
             let { id } = req.params;
-            let { first_name, last_name, gender, date_of_birth, phone, email, address, trainer_id, emergency_name, emergency_contact, emergency_relationship, plan_id, pricing_id, start_date, expiry_date, membership_status } = req.body;
+            let { first_name, last_name, gender, date_of_birth, phone, email, address, trainer_id, emergency_name, emergency_contact, emergency_relationship, plan_id, pricing_id, start_date, expiry_date, membership_status, experience_level, days_per_week, session_minutes, height, weight, bmi, fitness_goal, training_type } = req.body;
             let updatedBy = req.user.id;
 
             const sanitizedMember = {};
@@ -158,13 +204,21 @@ class MemberManagementController {
             if(last_name) sanitizedMember.last_name = last_name.trim();
             if(gender) sanitizedMember.gender = gender.trim().toLowerCase();
             if(date_of_birth) {
-                dob = new Date(date_of_birth);
+                const dob = new Date(date_of_birth);
 
                 if(Number.isNaN(dob.getTime())) {
                     return res.status(400).json({ message: "Invalid date of birth format"});
                 }
                 sanitizedMember.date_of_birth = dob
             }
+            if(experience_level) sanitizedMember.experience_level = experience_level.trim().toLowerCase();
+            if(days_per_week) sanitizedMember.days_per_week = Number(days_per_week)
+            if(session_minutes) sanitizedMember.session_minutes = Number(session_minutes)
+            if(height) sanitizedMember.height = Number(height)
+            if(weight) sanitizedMember.weight = Number(weight)
+            if(bmi) sanitizedMember.bmi = Number(bmi)
+            if(fitness_goal) sanitizedMember.fitness_goal = fitness_goal.trim().toLowerCase();
+            if(training_type) sanitizedMember.training_type = training_type.trim().toLowerCase();    
             if(phone) sanitizedMember.phone = phone.trim();
             if(email) sanitizedMember.email = email.trim().toLowerCase();
             if(address) sanitizedMember.address = address.trim().toLowerCase();

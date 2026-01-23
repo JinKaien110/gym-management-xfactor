@@ -18,6 +18,14 @@ class TrainerManagementModel {
         };
     }
 
+    async findTrainerByEmail(email) {
+        const db = await connectDB();
+
+        const trainer = await db.collection("trainers").findOne({email})
+
+        return trainer;
+    }
+
     async listTrainers(filter, page, limit) {
         const db = await connectDB();
 

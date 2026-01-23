@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import { generateToken } from "../utils/generateToken.js";
 import AuthModel from "../models/AuthModel.js";
 import MemberModel from "../models/MemberModel.js";
+import TrainerManagementModel from "../models/TrainerManagementModel.js";
 
 
 dotenv.config();
@@ -11,61 +12,100 @@ class AuthController {
     async loginUser(req, res) {
         try {
             const { email, password } = req.body;
-            if(!email || !password) {
-                return res.status(401).json({ message: "Please fillout the necessary field."});
+
+            if (!email || !password) {
+                return res.status(401).json({ message: "Please fill out the necessary field." });
             }
 
-            const sanitized = {
-                email: email?.trim().toLowerCase(),
-                password: password?.trim(),
+            const sanitizedEmail = String(email).trim().toLowerCase();
+            const sanitizedPassword = String(password).trim();
+
+            const [member, trainer] = await Promise.all([
+                AuthModel.FindUserByEmail(sanitizedEmail),
+                TrainerManagementModel.findTrainerByEmail(sanitizedEmail),
+            ]);
+
+            
+            const account = member || trainer;
+            
+            if (!account) {
+                return res.status(401).json({ message: "No user found." });
             }
 
-            const FindUserByEmail = await AuthModel.FindUserByEmail(sanitized.email);
+            const isPasswordMatch = await AuthModel.ValidatePassword(
+                sanitizedPassword,
+                account.password
+            );
 
-            if(!FindUserByEmail) return res.status(401).json({ message: " No user found." });
-
-            const isPasswordMatch = await AuthModel.ValidatePassword(sanitized.email, sanitized.password);
-
-            if(!isPasswordMatch) {
-                return res.status(401).json({ message: "Incorrect password."});
+            if (!isPasswordMatch) {
+                return res.status(401).json({ message: "Incorrect password." });
             }
 
-            const token = generateToken({ 
-                id: FindUserByEmail._id,
-                first_name: FindUserByEmail.first_name,
-                last_name: FindUserByEmail.last_name,
-                email: FindUserByEmail.email,
-                role: FindUserByEmail.role
+            // 3) Generate token from the same account
+            const token = generateToken({
+                id: account._id,
+                first_name: account.first_name,
+                last_name: account.last_name,
+                email: account.email,
+                role: account.role, 
             });
 
-            res.cookie('token', token, {
+            // 4) Cookie config (your secure flag is reversed)
+            res.cookie("token", token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === "development",
+                secure: process.env.NODE_ENV === "production",
                 sameSite: "strict",
-                maxAge: 60 * 60 * 1000
+                maxAge: 60 * 60 * 1000,
             });
 
-            res.status(200).json({
-                message: "Login successfully",
-                user: {
-                    id: FindUserByEmail._id,
-                    first_name: FindUserByEmail.first_name,
-                    last_name: FindUserByEmail.last_name,
-                    email: FindUserByEmail.email,
-                    role: FindUserByEmail.role,
-                    member_type: FindUserByEmail.member_type,
-                    gender: FindUserByEmail.gender,
-                    age: FindUserByEmail.age,
-                    height: FindUserByEmail.height,
-                    weight: FindUserByEmail.weight,
-                    bmi: FindUserByEmail.bmi,
-                    fitness_goal: FindUserByEmail.fitness_goal
-                }
-            })
+            // 5) Return user payload depending on role
+            const userPayload = {
+                id: account._id,
+                first_name: account.first_name,
+                last_name: account.last_name,
+                email: account.email,
+                role: account.role,
+            };
 
-        } catch (error) {
-            return res.status(500).json({ message: "Server error: ", error });
-        }
+            // include member-only fields
+            if (account.role === "member") {
+                userPayload.member_type = account.member_type;
+                userPayload.gender = account.gender;
+                userPayload.age = account.age;
+                userPayload.height = account.height;
+                userPayload.weight = account.weight;
+                userPayload.bmi = account.bmi;
+                userPayload.fitness_goal = account.fitness_goal;
+            }
+
+            // include trainer-only fields (example)
+            if (account.role === "trainer") {
+                userPayload.specialty = account.specialty;
+                userPayload.certifications = account.certifications;
+            }
+
+            return res.status(200).json({
+                message: "Login successfully",
+                user: userPayload,
+            });
+            } catch (error) {
+            console.error("LOGIN ERROR:", {
+    name: error?.name,
+    message: error?.message,
+    code: error?.code,
+    stack: error?.stack
+  });
+
+  return res.status(500).json({
+    message: "Server error",
+    error: {
+      name: error?.name,
+      message: error?.message,
+      code: error?.code
+    }
+  });
+            }
+
     }
 
     async RegisterUser(req, res) {

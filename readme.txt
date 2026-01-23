@@ -983,3 +983,38 @@ or
 **2)** manually set by admin?
 
 Reply **1 or 2**.
+
+
+MEMBER SCHEMA
+
+first_name: first_name.trim(),
+                last_name: last_name.trim(),
+                email: email.trim().toLowerCase(),
+                phone: phone.trim(),
+                address: null,
+                password: hashpassword,
+                role: "member",
+                status: "active",
+                member_type: null,
+                gender: null,
+                date_of_birth: null,
+                height: null,
+                weight: null,
+                bmi: null,
+                fitness_goal: null,
+                training_type: null,
+                medical_condition: null,
+                experience_level: null, 
+                days_per_week: null,
+                session_minutes: null,
+                trainer_id: null,
+                qr_code: null,
+                emergency_name: null,
+                emergency_contact: null,
+                emergency_relationship: null,
+                createdAt: new Date(),
+                createdBy: new ObjectId(createdBy),
+                updatedAt: new Date(),
+                updatedBy: new ObjectId(createdBy),
+                archivedAt: null,
+                archivedBy: null
