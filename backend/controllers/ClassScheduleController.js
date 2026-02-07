@@ -26,7 +26,7 @@ class ClassScheduleController {
     
     async viewAllClassSchedule(req, res, next) {
         try {
-            const result = await ClassScheduleService.viewAllClassSchedule(req.params.id, req.query);
+            const result = await ClassScheduleService.viewAllClassSchedule(req.query);
 
             return res.status(201).json(result);
         } catch (error) {
@@ -48,9 +48,20 @@ class ClassScheduleController {
 
     async updateClassScheduleStatus(req, res, next) {
         try {
-            const result = await ClassScheduleService.createClassSchedule(req.params.id, req.body.status, req.user);
+            const result = await ClassScheduleService.updateClassScheduleStatus(req.params.id, req.body.status, req.user);
 
             return res.status(201).json({ message: "Successfully updated a class schedule status", result});
+        } catch (error) {
+            debuggerLog("Server Error: ", error)
+            next(error)
+        }
+    }
+
+    async viewClassScheduleAssignedToMe(req, res, next) {
+         try {
+            const result = await ClassScheduleService.viewClassScheduleAssignedToMe(req.user, req.query);
+
+            return res.status(200).json(result);
         } catch (error) {
             debuggerLog("Server Error: ", error)
             next(error)

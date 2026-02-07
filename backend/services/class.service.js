@@ -142,7 +142,7 @@ class ClassService {
             throw new ValidationError("Invalid status value");
         }
 
-        if (existing.status === normalizedStatus) {
+        if (isClass.status === normalizedStatus) {
             return existing;
         }
 

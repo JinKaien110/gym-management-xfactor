@@ -4,7 +4,7 @@ import { debuggerLog } from "../utils/debuggerLog.js";
 class AIRecommendationController {
     async requestRecommendation(req, res, next) {
         try {
-            const result = await AIRecommendationService.requestRecommendation(req.body, req.user, req.auditMeta)
+            const result = await AIRecommendationService.requestRecommendation(req.auditMeta, req.body, req.user)
 
             return res.status(201).json(result);
         } catch (error) {
@@ -15,7 +15,7 @@ class AIRecommendationController {
 
     async decisionRecommendationByTrainer(req, res, next) {
         try {
-            const result = await AIRecommendationService.decisionRecommendationByTrainer(req.params.id, req.body, req.user)
+            const result = await AIRecommendationService.decisionRecommendationByTrainer(req.params.id, req.auditMeta, req.body, req.user)
 
             const status = String(req.body.status).trim().toLowerCase();
 
@@ -28,7 +28,7 @@ class AIRecommendationController {
 
     async regenerateRecommendation(req, res, next) {
         try {
-            const result = await AIRecommendationService.regenerateRecommendation(req.params.id, req.body, req.user)
+            const result = await AIRecommendationService.regenerateRecommendation(req.params.id, req.body, req.auditMeta, req.user)
 
             return res.status(200).json(result);
         } catch (error) {

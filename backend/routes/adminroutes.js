@@ -5,12 +5,7 @@ import MemberManagementController from "../controllers/MemberManagementControlle
 
 const router = express.Router();
 
-router.post(
-    "/admin/plan", 
-    verifyToken, 
-    authorizeRoles("admin"), 
-    AdminController.createPlansController
-);
+
 
 // Member Management API Route
 router.post("/admin/members", verifyToken, authorizeRoles("admin"), MemberManagementController.createMember);
@@ -19,21 +14,5 @@ router.get("/admin/members/:id", verifyToken, authorizeRoles("admin"), MemberMan
 router.put("/admin/members/:id", verifyToken, authorizeRoles("admin"), MemberManagementController.updateMemberProfile);
 router.patch("/admin/members/:id", verifyToken, authorizeRoles("admin"), MemberManagementController.updateUserStatus);
 router.post("/admin/members/:id/assign-trainer", verifyToken, authorizeRoles("admin"), MemberManagementController.assignATrainer);
-
-// Plans API Route
-router.post("/admin/plans", verifyToken, authorizeRoles("admin"), AdminController.createPlansController);
-router.get("/admin/plans", verifyToken, authorizeRoles("admin"), AdminController.viewAllPlans);
-router.get("/admin/plans/:id", verifyToken, authorizeRoles("admin"), AdminController.viewAPlan);
-router.put("/admin/plans/:id", verifyToken, authorizeRoles("admin"), AdminController.updatePlan);
-router.patch("/admin/plans/:id/status", verifyToken, authorizeRoles("admin"), AdminController.updatePlanStatus);
-
-// Price API Route
-router.post("/admin/pricing", verifyToken, authorizeRoles("admin"), AdminController.createPricingController);
-router.get("/admin/pricing", verifyToken, authorizeRoles("admin"), AdminController.viewAllPricing);
-router.get("/admin/pricing/:id", verifyToken, authorizeRoles("admin"), AdminController.viewOnePricing);
-router.get("/admin/pricing/plan/:plan_id", verifyToken, authorizeRoles("admin"), AdminController.viewPricingByPlan);
-router.put("/admin/pricing/:id", verifyToken, authorizeRoles("admin"), AdminController.updatePricing);
-router.patch("/admin/pricing/:id/status", verifyToken, authorizeRoles("admin"), AdminController.updatePricingStatus);
-
 
 export default router; 

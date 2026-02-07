@@ -4,7 +4,7 @@ import { debuggerLog } from "../utils/debuggerLog.js";
 class BookingController {
     async joinBooking(req, res, next) {
         try {
-            const result = await BookingService.joinBooking(req.params.id, req.user);
+            const result = await BookingService.joinBooking(req.params.id, req.auditMeta, req.user);
 
             return res.status(200).json({ message: "Successfully joined a class schedule", result});
         } catch (error) {
@@ -15,7 +15,7 @@ class BookingController {
 
     async viewMyBookings(req, res, next) {
         try {
-            const result = await BookingService.joinBooking(req.user.id);
+            const result = await BookingService.viewMyBookings(req.user.id);
 
             return res.status(200).json(result);
         } catch (error) {
@@ -37,7 +37,7 @@ class BookingController {
 
     async viewAllBooking(req, res, next) {
         try {
-            const result = await BookingService.joinBooking(req.query);
+            const result = await BookingService.viewAllBooking(req.query);
 
             return res.status(200).json(result);
         } catch (error) {
@@ -48,7 +48,7 @@ class BookingController {
 
     async cancelBooking(req, res, next) {
         try {
-            const result = await BookingService.joinBooking(req.params.id, req.body, req.user);
+            const result = await BookingService.cancelBooking(req.params.id, req.auditMeta, req.body, req.user);
 
             return res.status(200).json({ message: "Successfully cancel a class schedule", result});
         } catch (error) {

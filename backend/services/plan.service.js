@@ -1,0 +1,191 @@
+import { ValidationError } from "../errors/ValidationError.js";
+import AuditLogsService from "./audit.logs.service.js"; 
+import PlanModel from "../models/PlanModel.js";
+import { ObjectId } from "mongodb";
+
+
+class PlanService {
+    
+    async createPlans(meta, body, updater) {  
+        const { name, label } = body;
+        let adminId = updater.id;
+    
+        if(!name?.trim() || !label?.trim()) {
+            throw new ValidationError("Please fillout the necessary fields!");
+        }
+    
+        if(!adminId || !ObjectId.isValid(adminId)) {
+            throw new ValidationError("Invalid admin Id");
+        }
+
+        return await AuditLogsService.auditWrap({
+            action: "CREATE_PLAN",
+            entity: "plans",
+            actor: { id: adminId, role: updater.role }, 
+            meta: meta,
+            summary: `${updater.first_name} created a plan`,
+            fn: async () => {
+
+                const sanitized = {
+                    name: name.trim().toLowerCase(),
+                    label: label.trim(),
+                    status: "active",
+                    createdAt: new Date(),
+                    createdBy: new ObjectId(adminId),
+                    updatedAt: null,
+                    updatedBy: null,
+                    archivedAt: null,
+                    archivedBy: null
+                }
+    
+                return await PlanModel.createPlans(sanitized);
+            }
+        });
+    }
+    
+    async viewAllPlans(query) {
+        let { status, name, page = 1, limit = 10 } = query;
+
+        page = Number(page)
+        limit = Number(limit)
+    
+        const filter = {};
+    
+        if(status) {
+            filter.status = status.trim().toLowerCase();
+        }
+    
+        if(name) {
+            filter.name = name.trim().toLowerCase();
+        }
+    
+        return await PlanModel.viewAllPlans(filter, page, limit);
+    }
+    
+    async viewAPlan(id) {
+        if(!id || !ObjectId.isValid(id)) throw new ValidationError("Missing plan id");
+                
+        const sanitized = new ObjectId(id);
+    
+        return await PlanModel.viewAPlan(sanitized);
+    }
+    
+    async updatePlan(id, meta, body, updater) {
+        let adminId = updater.id;
+    
+        if(!id || !ObjectId.isValid(id)) {
+            throw new ValidationError("Invalid plan id");
+        }
+    
+        if(!adminId || !ObjectId.isValid(adminId)) {
+            throw new ValidationError("Invalid admin Id");
+        }
+    
+        const plan_id = new ObjectId(id);
+        const Exist = await PlanModel.viewAPlan(plan_id);
+        if(!Exist) {
+            throw new ValidationError("No plan found");
+        }
+    
+        const { name, label } = body;
+    
+        const sanitized = {};
+    
+        if(name) sanitized.name = name.trim().toLowerCase();
+        if(label) sanitized.label = label.trim();
+    
+        sanitized.updatedAt = new Date();
+        sanitized.updatedBy = new ObjectId(adminId);
+
+        return await AuditLogsService.auditWrap({
+            action: "UPDATE_PLAN",
+            entity: "plans",
+            actor: { id: adminId, role: updater.role }, 
+            meta: meta,
+            summary: `${updater.first_name} updated a plan`,
+            changes: { 
+                patch: {
+                    before: {
+                        name: Exist.name,
+                        label: Exist.label
+                    },
+                    after: {
+                        name: sanitized.name ?? Exist.name,
+                        label: sanitized.label ?? Exist.label
+                    }
+                } 
+            },
+            fn: async () => {
+                return await PlanModel.updatePlan(plan_id, sanitized);
+            }
+        });
+    }
+    
+    async updatePlanStatus(id, meta, status, updater) {
+        let adminId = updater.id;
+                
+        if(!id || !ObjectId.isValid(id)) {
+            throw new ValidationError("Invalid plan id");
+        }
+    
+        if(!adminId || !ObjectId.isValid(adminId)) {
+            throw new ValidationError("Invalid admin Id");
+        }
+    
+        const plan_id = new ObjectId(id);
+        adminId = new ObjectId(adminId);
+
+        const ifExist = await PlanModel.viewAPlan(plan_id);
+        if(!ifExist) {
+            throw new ValidationError("No plan exist");
+        }
+    
+        if(!status) {
+            throw new ValidationError("Missing status change value");
+        }
+    
+        const allowedStatus = ["active", "inactive", "archived"];
+        if(!allowedStatus.includes(status)) {
+            throw new ValidationError("Invalid status value");
+            }
+    
+        let archivedAt = null;
+        let archivedBy = null;
+    
+        if(status === "archived") {
+            archivedAt = new Date();
+            archivedBy = new ObjectId(adminId);
+        } 
+    
+        const sanitized = {
+            status: status.trim().toLowerCase(),
+            updatedAt: new Date(),
+            updatedBy: adminId,
+            archivedAt: archivedAt,
+            archivedBy: archivedBy
+        };
+        
+        return await AuditLogsService.auditWrap({
+            action: "UPDATE_PLAN_STATUS",
+            entity: "plans",
+            actor: { id: adminId, role: updater.role  }, 
+            meta: meta,
+            summary: `${updater.first_name} updated the ${ifExist.label} plan  status to ${status}`,
+            changes: { 
+                patch: {
+                    before: {
+                        status: ifExist.status
+                    },
+                    after: {
+                        status: sanitized.status
+                    }
+                } 
+            },
+            fn: async () => {
+                return await PlanModel.updatePlanStatus(plan_id, sanitized);
+            }
+        });
+    }
+}
+
+export default new PlanService();

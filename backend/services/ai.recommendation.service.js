@@ -12,7 +12,7 @@ dotenv.config()
 
 
 class AIRecommendationService {
-    async requestRecommendation(body, updater, meta) {
+    async requestRecommendation(meta, body, updater, ) {
         if (!updater?.id || !ObjectId.isValid(updater.id)) {
             throw new ValidationError("Invalid trainer ID");
         }
@@ -37,7 +37,6 @@ class AIRecommendationService {
             actor,
             meta,
             summary: `Trainer requested AI recommendation for member ${String(memberId)}`,
-            changes: { patch: { notes } },
 
             fn: async () => {
             const member = await MemberModel.FindUserById(memberId);
@@ -113,7 +112,7 @@ class AIRecommendationService {
     }
 
 
-    async decisionRecommendationByTrainer(id, body, updater) {
+    async decisionRecommendationByTrainer(id, meta, body, updater) {
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid recommendations ID");
         }
@@ -165,13 +164,33 @@ class AIRecommendationService {
             updatedBy: trainerId,
         };
 
-        return await AIRecommendationModel.decisionRecommendationByTrainer(
-            new ObjectId(id),
-            data
-        )
+        return await AuditLogsService.auditWrap({
+            action: "DECISION_RECOMMENDATION",
+            entity: "workout_recommendations",
+            actor: { id: trainerId, role: 
+                updater.role
+              }, 
+            meta: meta,
+            summary: `${updater.first_name} decided to ${status} the recommendation`,
+            changes: {
+                before: {
+                    status: existing.status
+                },
+                after: {
+                    status: status
+                }
+            },
+            fn: async () => {
+                return await AIRecommendationModel.decisionRecommendationByTrainer(
+                    new ObjectId(id),
+                    data
+                )
+            }
+        });
+        
     }
 
-    async regenerateRecommendation(id, body, updater) {
+    async regenerateRecommendation(id, meta, body, updater) {
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid recommendation ID");
         }
@@ -317,7 +336,21 @@ class AIRecommendationService {
             updatedBy: null,
         };
 
-        return await AIRecommendationModel.requestRecommendation(newDoc)
+        
+        return await AuditLogsService.auditWrap({
+            action: "REGENERATE_RECOMMENDATION",
+            entity: "workout_recommendations",
+            actor: { id: trainerId, role: 
+                updater.role
+              }, 
+            meta: meta,
+            summary: `${updater.first_name} request for a new recommendation`,
+            fn: async () => {
+                return await AIRecommendationModel.requestRecommendation(newDoc)
+            }
+        });
+
+        
     }
 
     async getRecommendationDetails(id) {

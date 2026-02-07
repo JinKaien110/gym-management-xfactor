@@ -82,6 +82,7 @@ class ClassScheduleModel {
             result,
             page,
             limit,
+            total,
             totalPages: Math.ceil(total / limit)
         }
     }
@@ -116,6 +117,38 @@ class ClassScheduleModel {
         }
 
         return result;
+    }
+
+    async viewClassScheduleAssignedToMe(id, page, limit) {
+        const db = await connectDB();
+
+        const skip = (page - 1) * limit;
+        const result = await db.collection("class_schedule")
+        .find({ trainer_id: id })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+
+        const total = await db.collection("class_schedule").countDocuments({trainer_id: id});
+
+        if(result.length === 0) {
+            return {
+                result: [],
+                page,
+                limit,
+                total: 0,
+                totalPages: 0
+            }
+        }
+        
+        return {
+            result,
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit)
+        }
     }
 }
 

@@ -83,7 +83,7 @@ class ClassScheduleService {
             end_at,
             capacity: capValue,
             trainer_id,
-            location: location?.trim() || "X-Factor Fitness Gym Trece Premises",
+            location: location?.trim() || "X-actor Fitness Gym Trece",
             notes: notes?.trim() || "",
             status: "open",
             createdAt: new Date(),
@@ -226,6 +226,7 @@ class ClassScheduleService {
     }
 
     async updateClassScheduleStatus(id, status, updater) {
+        console.log(status)
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid class schedule ID");
         }
@@ -271,6 +272,26 @@ class ClassScheduleService {
             new ObjectId(id),
             data
         )
+    }
+
+    async viewClassScheduleAssignedToMe(user, query) {
+        let { page = 1, limit = 10} = query
+        if(!user.id || !ObjectId.isValid(user.id)) {
+            throw new ValidationError("Invalid trainer ID")
+        }
+
+        page = Number(page);
+        limit = Number(limit);
+        
+        if(user.role !== "trainer") {
+            throw new ValidationError("Only trainer can classes schedule assigned to them");
+        }
+
+        return await ClassScheduleModel.viewClassScheduleAssignedToMe(
+            new ObjectId(user.id),
+            page,
+            limit
+        );
     }
 }
 

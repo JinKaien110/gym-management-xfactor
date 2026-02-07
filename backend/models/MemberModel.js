@@ -4,96 +4,77 @@ import { ObjectId } from "mongodb";
 import { hashedPassword } from "../utils/hashedPassword.js";
 import { debuggerLog } from "../utils/debuggerLog.js";
 import { generateQrCode } from "../utils/generateQrCode.js";
+import { ValidationError } from "../errors/ValidationError.js";
 
 class MemberModel {
 
-    async RegisterUser(UserData) {
-        try{ 
-            const db = await connectDB();
-            const hashpassword = await hashedPassword(UserData.password);
-            console.log("here")
-            const result = await db.collection("members").insertOne({
-                ...UserData, 
-                password: hashpassword
-            });
+    async RegisterUser(data) {
+        const db = await connectDB();
+        const result = await db.collection("members").insertOne(data);
 
-            return result;
-        } catch(error) {
-            console.log("Something went wrong: (UserModel - UserRegister)", error);
-            return "Something went wrong: (UserModel - UserRegister)";
-        }
+        return {
+            id: result.insertedId,
+            ...data
+        };
     }
 
     async FindUserById(id) {
         const db = await connectDB();
-        const UserId = await db.collection("members").findOne(
+        const result = await db.collection("members").findOne(
             { _id: new ObjectId(id) },
             { projection: { password: 0 } }
         );
 
-        if(!UserId) {
-            console.log("Something went wrong: (UserModel - UserRegister)");
-            return "Something went wrong: (UserModel - UserRegister)";
+        if(!result) {
+            throw new ValidationError("Failed to find user by ID");
         }
-        return UserId;
+
+        return result;
     }
 
     async PostForm(UserData, id) {
-        try {
-            const db = await connectDB();
-            const qr = await generateQrCode(id);
+        const db = await connectDB();
+        const qr = await generateQrCode(id);
 
-            const newUser = {
-                gender: UserData.gender?.trim().toLowerCase() || null,
-                age: UserData.age ? Number(UserData.age) : null,
-                height: UserData.height ? Number(UserData.height) : null,
-                weight: UserData.weight ? Number(UserData.weight) : null,
-                bmi: UserData.bmi ? Number(UserData.bmi.toFixed(1)) : null,
-                fitness_goal: UserData.fitness_goal?.trim() || null,
-                medical_condition: UserData.medical_condition?.trim() || null,
-                qr_code: qr,
-                updatedAt: new Date(),
-                updatedBy: new ObjectId(id)
-            }
+        const newUser = {
+            gender: UserData.gender?.trim().toLowerCase() || null,
+            date_of_birth: UserData.date_of_birth ? Number(UserData.date_of_birth) : null,
+            height: UserData.height ? Number(UserData.height) : null,
+            weight: UserData.weight ? Number(UserData.weight) : null,
+            bmi: UserData.bmi ? Number(UserData.bmi.toFixed(1)) : null,
+            fitness_goal: UserData.fitness_goal?.trim() || null,
+            medical_condition: UserData.medical_condition?.trim() || null,
+            qr_code: qr,
+            updatedAt: new Date(),
+            updatedBy: new ObjectId(id)
+        }
 
-            const memberupdate = await db.collection("members").updateOne(
-                { _id: new ObjectId(id) },
-                { $set:  newUser }
-             )
+        const memberupdate = await db.collection("members").updateOne(
+            { _id: new ObjectId(id) },
+            { $set:  newUser }
+            )
 
-             if(memberupdate.acknowledged) {
-                return memberupdate;
-             }
-
-        } catch (error) {
-            debuggerLog("PostForm Model", error);
-            return "PostForm Model", error
+            if(memberupdate.acknowledged) {
+            return memberupdate;
         }
     }
 
     async getAvailableTrainers(fitnessGoal) {
-        try {
-            const db = await connectDB();
-            const allTrainers = await db.collection("trainers").aggregate([
-                {
-                    $addFields: {
-                        matchScore: { $cond: [{ $eq: ["$specialization", fitnessGoal] }, 1, 0] },
-                        load: { $size: "$assigned_members" },
-                        stillAvailable: { $gt: [ { $size: "$assigned_members"}, "$max_members"] }
-                    }
-                },
-                {
-                    $match: { stillAvailable: true }
-                },
-                { $sort: { matchScore: -1, load: 1} }
-            ]).toArray();
-            return allTrainers;
-
-        } catch (error) {
-            debuggerLog("getAvailableTrainers Model", error);
-            return { message: "getAvailableTrainers Model", error };
-
-        }
+        const db = await connectDB();
+        const result = await db.collection("trainers").aggregate([
+            {
+                $addFields: {
+                    matchScore: { $cond: [{ $eq: ["$specialization", fitnessGoal] }, 1, 0] },
+                    load: { $size: "$assigned_members" },
+                    stillAvailable: { $gt: [ { $size: "$assigned_members"}, "$max_members"] }
+                }
+            },
+            {
+                $match: { stillAvailable: true }
+            },
+            { $sort: { matchScore: -1, load: 1} }
+        ]).toArray();
+        return result;
     }
 
     async assignedTrainer(memberId, trainer_id) {

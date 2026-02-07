@@ -2,9 +2,10 @@ import { ObjectId } from "mongodb";
 import { ValidationError } from "../errors/ValidationError.js";
 import BookingModel from "../models/BookingModel.js";
 import ClassScheduleModel from "../models/ClassScheduleModel.js";
+import ClassModel from "../models/ClassModel.js";
 
 class BookingService {
-    async joinBooking(id, updater) {
+    async joinBooking(id, meta, updater) {
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid class schedule ID");
         }
@@ -17,6 +18,8 @@ class BookingService {
         if(!schedule) {
             throw new ValidationError("Class schedule not found")
         }
+
+        const classes = await ClassModel.viewClass(new ObjectId(schedule.class_id))
 
         if(schedule.status !== "open") {
             throw new ValidationError("Class schedule is not open for booking");
@@ -52,8 +55,16 @@ class BookingService {
             updatedAt: null,
             updatedBy: null
         }
-
-        return await BookingModel.joinBooking(data)
+        return await AuditLogsService.auditWrap({
+            action: "BOOK_CLASS_SCHEDULE-BOOKING",
+            entity: "bookings",
+            actor: { id: new ObjectId(updater.id), role: updater.role  }, 
+            meta: meta,
+            summary: `${updater.first_name} (${updater.id}) book the class ${classes.name}`,
+            fn: async () => {
+                return await BookingModel.joinBooking(data)
+            }
+        });
     }
 
     async viewMyBookings(id, page = 1, limit = 10) {
@@ -124,6 +135,10 @@ class BookingService {
 
         const booking = await BookingModel.viewBookingDetails(new ObjectId(id));
 
+        const schedule = await ClassScheduleModel.viewClassSchedule(new ObjectId(booking.schedule_id))
+
+        const classes = await ClassModel.viewClass(new ObjectId(schedule.class_id))
+
         if(!booking) {
             throw new ValidationError("Booking not found")
         }
@@ -150,11 +165,30 @@ class BookingService {
             updatedAt: new Date(),
             updatedBy: new ObjectId(updater.id)
         }
-
-        return await BookingModel.cancelBooking(
-            new ObjectId(id),
-            data
-        )
+        return await AuditLogsService.auditWrap({
+            action: "CANCEL_BOOKING_CLASS_SCHEDULE-BOOKING",
+            entity: "bookings",
+            actor: { id: new ObjectId(updater.id), role: updater.role  }, 
+            meta: meta,
+            summary: `${updater.first_name} (${updater.id}) cancel his booking in the class ${classes.name}`,
+            changes: {
+                patch: {
+                    before: {
+                        status: booking.status
+                    }, 
+                    after: {
+                        status: "cancelled"
+                    },
+                    reason
+                }
+            },
+            fn: async () => {
+                return await BookingModel.cancelBooking(
+                    new ObjectId(id),
+                    data
+                )
+            }
+        });
     }
 }
 

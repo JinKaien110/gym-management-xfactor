@@ -7,10 +7,15 @@ import { connectDB } from "./config/db.js";
 import AuthRoutes from "./routes/authroutes.js";
 import MemberRoutes from "./routes/memberroutes.js";
 import AdminRoutes from "./routes/adminroutes.js";
+import PlanRoutes from "./routes/planroute.js";
+import PricingRoutes from "./routes/pricingroutes.js";
 import TrainerRoutes from "./routes/trainerroutes.js";
 import MembershipRoutes from "./routes/membershiproutes.js";
 import PaymentRoutes from "./routes/paymentroutes.js";
 import AIRoutes from "./routes/airoutes.js";
+import ClassRoutes from "./routes/classroutes.js";
+import ClassScheduleRoutes from "./routes/classscheduleroutes.js";
+import BookingRoutes from "./routes/bookingroutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { auditMeta } from "./middleware/auditMeta.js";
 
@@ -29,10 +34,15 @@ app.use(auditMeta)
 app.use('/api', AuthRoutes);
 app.use('/api',  MemberRoutes);
 app.use('/api',  AdminRoutes);
+app.use('/api',  PlanRoutes);
+app.use('/api',  PricingRoutes);
 app.use('/api', TrainerRoutes);
 app.use('/api', MembershipRoutes);
 app.use('/api', PaymentRoutes);
 app.use('/api', AIRoutes);
+app.use('/api', ClassRoutes);
+app.use('/api', ClassScheduleRoutes);
+app.use('/api', BookingRoutes);
 
 
 app.use(errorHandler)

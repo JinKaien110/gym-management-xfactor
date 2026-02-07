@@ -1018,3 +1018,16 @@ first_name: first_name.trim(),
                 updatedBy: new ObjectId(createdBy),
                 archivedAt: null,
                 archivedBy: null
+
+
+
+return await AuditLogsService.auditWrap({
+  action: "",
+  entity: "",
+  actor: { id: new ObjectId(updater.id), role: updater.role }, 
+  meta: meta,
+  summary: ``,
+  fn: async () => {
+  
+  }
+});

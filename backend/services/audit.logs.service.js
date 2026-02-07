@@ -43,7 +43,7 @@ class AuditLogService {
         try {
             const result = await fn();
 
-            const finalEntityId = entity_id ?? result?._id ?? null;
+            const finalEntityId = entity_id ?? result?.insertedId ?? result?._id ?? null;
 
             await this.log({
             action,
