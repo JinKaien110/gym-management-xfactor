@@ -4,7 +4,7 @@ import { ValidationError } from "../errors/ValidationError.js";
 
 class BookingModel {
     async joinBooking(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("bookings").insertOne(data);
 
@@ -16,7 +16,7 @@ class BookingModel {
     }
 
     async viewMyBookings(id, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("bookings")
             .find({ member_id: id })
@@ -37,7 +37,7 @@ class BookingModel {
     }
 
     async checkIfAlreadyJoined(schedule_id, member_id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("bookings").findOne({
             schedule_id: schedule_id,
@@ -49,7 +49,7 @@ class BookingModel {
     }
 
     async viewBookingDetails(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("bookings").findOne({
             _id: id
@@ -59,7 +59,7 @@ class BookingModel {
     }
 
     async countJoined(schedule_id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("bookings").countDocuments({
             schedule_id: schedule_id,
@@ -70,7 +70,7 @@ class BookingModel {
     }
 
     async viewAllBooking(filter, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const skip = (page - 1) * limit
 
@@ -105,7 +105,7 @@ class BookingModel {
     }
 
     async cancelBooking(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("bookings").findOneAndUpdate(
             { _id: id },

@@ -6,7 +6,7 @@ import { ObjectId } from "mongodb";
 
 class PricingService {
     async createPricing(meta, body, updater) {
-        const { plan_id, name, label, duration_days, price, membership_fee } = body;
+        const { plan_id, name, label, duration_days, price, membership_fee, type } = body;
 
         let adminId = updater.id;
 
@@ -14,11 +14,14 @@ class PricingService {
             throw new ValidationError("Invalid admin Id");
         }
 
-        if(!plan_id || !name || !label || !duration_days || !price || !membership_fee) {
+        if(!plan_id || !name || !label || !duration_days || !price || !membership_fee || !type) {
             throw new ValidationError("Please fillout the necessary fields!");
         }
 
         if(!ObjectId.isValid(plan_id)) throw new ValidationError("Invalid plan ID");
+
+        const allowedTypes = ["regular", "discounted"];
+        if(!allowedTypes.includes(type)) throw new ValidationError("Pricing type value is not valid");
 
         const planId = new ObjectId(plan_id);
         adminId = new ObjectId(adminId);
@@ -30,6 +33,7 @@ class PricingService {
             duration_days: Number(duration_days),
             price: Number(price),
             membership_fee: Number(membership_fee),
+            type: type.trim().toLowerCase(),
             status: "active",
             createdAt: new Date(),
             createdBy: adminId,
@@ -53,7 +57,7 @@ class PricingService {
     }
 
     async viewAllPricing(query) {
-        let { name, price, membership_fee, status, page = 1, limit = 10 } = query;
+        let { name, price, membership_fee, status, type, page = 1, limit = 10 } = query;
         
         page = Number(page);
         limit = Number(limit);
@@ -76,6 +80,10 @@ class PricingService {
 
         if(membership_fee) {
             filter.membership_fee = membership_fee;
+        }
+
+        if(type) {
+            filter.type = String(type).trim().toLowerCase();
         }
 
         return await PricingModel.viewAllPricing(filter, page, limit);
@@ -107,7 +115,7 @@ class PricingService {
     }
 
     async updatePricing(id, meta, body, updater) {
-        const { name, label, price, duration_days, membership_fee,  } = body;
+        const { name, label, price, duration_days, membership_fee, type  } = body;
         let adminId = updater.id; 
 
         if(!id || !ObjectId.isValid(id)) {
@@ -118,7 +126,7 @@ class PricingService {
             throw new ValidationError("Invalid admin  ID");
         }
 
-        if(!name || !label || !price || !duration_days || !membership_fee) {
+        if(!name || !label || !price || !duration_days || !membership_fee || !type) {
             throw new ValidationError("Please fill out the necessary fields");
         }
 
@@ -137,6 +145,7 @@ class PricingService {
             price: Number(price),
             duration_days: Number(duration_days),
             membership_fee: Number(membership_fee),
+            type: String(type).trim().toLowerCase(),
             updatedAt: new Date(),
             updatedBy: adminId
         }
@@ -153,14 +162,16 @@ class PricingService {
                         label: Exist.label,
                         price: Exist.price,
                         duration_days: Exist.duration_days,
-                        membership_fee: Exist.membership_fee
+                        membership_fee: Exist.membership_fee,
+                        type: Exist.type
                     },
                     after: {
                         name: priceData.name ?? Exist.name,
                         label: priceData.label ?? Exist.label,
                         price: priceData.price ?? Exist.price,
                         duration_days: priceData.duration_days ?? Exist.duration_days,
-                        membership_fee: priceData.membership_fee ?? Exist.membership_fee
+                        membership_fee: priceData.membership_fee ?? Exist.membership_fee,
+                        type: priceData.type ?? Exist.type
                     }
                 }
             },

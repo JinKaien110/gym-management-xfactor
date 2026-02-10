@@ -9,9 +9,14 @@ const client = new MongoClient(uri);
 
 async function connectDB() {
     try {
-        await client.connect();
-        console.log("Database connected!");
-        return client.db(dbname);
+        if (!client.topology?.isConnected()) {
+            await client.connect();
+            console.log("Database connected!");
+        }
+        return {
+            db: client.db(dbname),
+            client
+        };
     } catch {
         console.error("Database failed to connect: ", error);
         process.exit(1);

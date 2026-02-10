@@ -6,7 +6,6 @@ import { connectDB } from "./config/db.js";
 
 import AuthRoutes from "./routes/authroutes.js";
 import MemberRoutes from "./routes/memberroutes.js";
-import AdminRoutes from "./routes/adminroutes.js";
 import PlanRoutes from "./routes/planroute.js";
 import PricingRoutes from "./routes/pricingroutes.js";
 import TrainerRoutes from "./routes/trainerroutes.js";
@@ -33,7 +32,6 @@ app.use(auditMeta)
 
 app.use('/api', AuthRoutes);
 app.use('/api',  MemberRoutes);
-app.use('/api',  AdminRoutes);
 app.use('/api',  PlanRoutes);
 app.use('/api',  PricingRoutes);
 app.use('/api', TrainerRoutes);

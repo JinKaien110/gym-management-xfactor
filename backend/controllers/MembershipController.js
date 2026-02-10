@@ -7,28 +7,25 @@ dotenv.config();
 
 class MembershipController {
 
-    async createMembershipRequest(req, res) {
+    async createMembershipRequest(req, res, next) {
         try {
-            const result = await MembershipService.createMembershipRequest(req.user, req.body);
+            const result = await MembershipService.createMembershipRequest(req.auditMeta, req.body, req.user);
 
             return res.status(201).json({ message: "Successfully created the membership", result});
         } catch (error) {
-            if (error.message.includes("Invalid") || error.message.includes("fill")) {
-                return res.status(400).json({ message: error.message });
-            }
             debuggerLog("createMembership Controller: ", error);
-            return res.status(500).json({ message: "Server Error", error: error.message});
+            next(error)
         }
     }
 
-    async viewMembership(req, res) {
+    async viewMembership(req, res, next) {
         try {
             const result = await MembershipService.viewMembership(req.params.id);
 
             return res.status(200).json(result);
         } catch (error) {
             debuggerLog("viewMembership Controller: ", error);
-            return res.status(500).json({ message: "Server Error", error: error.message});
+            next(error)
         }
     }
 
@@ -43,47 +40,47 @@ class MembershipController {
         }
     }
 
-    async updateMembership(req, res) {
+    async updateMembership(req, res, next) {
         try {
-            const result = await MembershipService.updateMembership(req.params.id, req.body, req.user);
+            const result = await MembershipService.updateMembership(req.params.id, req.auditMeta, req.body, req.user);
 
             return res.status(200).json({ message: "Successfully updated the membership", result});
         } catch (error) {
             debuggerLog("updateMembership Controller: ", error);
-            return res.status(500).json({ message: "Server Error", error: error.message});
+            next(error)
         }
     }
 
-    async updateMembershipStatus(req, res) {
+    async updateMembershipStatus(req, res, next) {
         try {
-            const result = await MembershipService.updateMembershipStatus(req.params.id, req.body, req.user);
+            const result = await MembershipService.updateMembershipStatus(req.params.id, req.auditMeta, req.body, req.user);
 
             return res.status(200).json({ message: "Successfully updated the membership status", result});
         } catch (error) {
             debuggerLog("updateMembershipStatus Controller: ", error);
-            return res.status(500).json({ message: "Server Error", error: error});
+            next(error)
         }
     }
     
-    async freezeMembership(req, res) {
+    async freezeMembership(req, res, next) {
         try {
-            const result = await MembershipService.freezeMembership(req.params.id, req.body, req.user);
+            const result = await MembershipService.freezeMembership(req.params.id, req.auditMeta, req.body, req.user);
 
             return res.status(200).json({ message: "Successfully freeze the membership", result});
         } catch (error) {
             debuggerLog("freezeMembership Controller: ", error);
-            return res.status(500).json({ message: "Server Error", error: error.message});
+            next(error)
         }
     }
 
-    async unfreezeMembership(req, res) {
+    async unfreezeMembership(req, res, next) {
         try {
-            const result = await MembershipService.unfreezeMembership(req.params.id, req.user);
+            const result = await MembershipService.unfreezeMembership(req.params.id, req.auditMeta, req.user);
 
             return res.status(200).json({ message: "Successfully unfreeze the membership", result});
         } catch (error) {
             debuggerLog("unfreezeMembership Controller: ", error);
-            return res.status(500).json({ message: "Server Error", error: error.message});
+            next(error)
         }
     }
 } 

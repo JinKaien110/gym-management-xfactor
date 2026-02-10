@@ -5,6 +5,8 @@ import { hashedPassword } from "../utils/hashedPassword.js";
 import checkDuplicate from "../utils/checkDuplicate.js";
 import { getChangedFields } from "../utils/getChangedFields.js";
 import MemberModel from "../models/MemberModel.js";
+import { ValidationError } from "../errors/ValidationError.js";
+import { connectDB } from "../config/db.js";
 
 
 class TrainerService {
@@ -252,7 +254,7 @@ class TrainerService {
 
     async assignMember(id, body, updater) {
 
-        if(!body.member) {
+        if(!body.member_id) {
             throw new Error("Please select a member to add");
         }
 
@@ -260,11 +262,11 @@ class TrainerService {
             throw new Error("Invalid trainer ID");
         }
 
-        if(!updater || !ObjectId.isValid(updater)) {
+        if(!updater.id || !ObjectId.isValid(updater.id)) {
             throw new Error("Invalid updater ID");
         }
 
-        if(!ObjectId.isValid(body.member)) {
+        if(!ObjectId.isValid(body.member_id)) {
             throw new Error("Invalid member ID");
         }
 
@@ -274,7 +276,7 @@ class TrainerService {
             throw new Error("Trainer not found");
         }
 
-        const member = await MemberModel.FindUserById(body.member);
+        const member = await MemberModel.findUserById(new ObjectId(body.member_id));
 
         if(!member) {
             throw new Error("Member not found");
@@ -284,19 +286,14 @@ class TrainerService {
             throw new Error("Member has already have a trainer");
         }
 
-        if(trainer.assigned_members.some(m => m.equals(new ObjectId(body.member)))) {
+        if(trainer.assigned_members.some(m => m.equals(new ObjectId(body.member_id)))) {
             throw new Error("Member is already assigned to the trainer");
         }
-
-        const sanitize = {
-            updatedAt: new Date(),
-            updatedBy: new ObjectId(updater)
-        }
-
+        
         return await TrainerManagementModel.assignMember(
-            new ObjectId(id),
-            new ObjectId(body.member),
-            sanitize
+            new ObjectId(body.member_id), 
+            new ObjectId(id), // trainer_id
+            new ObjectId(updater.id)
         )
     }
 

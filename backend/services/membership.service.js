@@ -8,53 +8,142 @@ import { calculateEndDate } from "../utils/calculateEndDate.js";
 import PaymentModel from "../models/PaymentModel.js";
 import PaymentService from "./payment.service.js";
 import { ValidationError } from "../errors/ValidationError.js";
+import PlanModel from "../models/PlanModel.js";
+import MemberModel from "../models/MemberModel.js";
 
 dotenv.config();
 
 class MembershipService {
-    async createMembershipRequest(user, body) {
-        let { member_id, plan_id, pricing_id, type } = body;
-        let creator = user.id;
+    async requestMembership(meta, body, updater, session = null) {
+        let { plan_id, pricing_id, member_type, status } = body;
+        const id = new ObjectId(updater.id);
 
-        if(!member_id || !ObjectId.isValid(member_id)) {
-            throw new Error("Invalid member ID");
+        if(!updater) {
+            throw new ValidationError("No member login");
         }
 
-        if(!plan_id || !ObjectId.isValid(plan_id)) {
-            throw new Error("Invalid plan ID");
+        if(!id || !ObjectId.isValid(id)) {
+            throw new ValidationError("Invalid member ID");
         }
 
-        if(!creator || !ObjectId.isValid(creator)) {
-            throw new Error("Invalid admin ID");
+         if(!plan_id || !ObjectId.isValid(plan_id)) {
+            throw new ValidationError("Invalid plan ID");
         }
 
         if(!pricing_id || !ObjectId.isValid(pricing_id)) {
-            throw new Error("Invalid pricing ID");
+            throw new ValidationError("Invalid pricing ID");
+        }
+
+        if(!creator || !ObjectId.isValid(creator)) {
+            throw new ValidationError("Invalid admin ID");
         }
         
-        if(!type) {
-            throw new Error("Request type is required");
+        if(!member_type) {
+            throw new ValidationError("Request type is required");
         }
+
+        if(!status) {
+            throw new ValidationError("Status is required");
+        }
+
+        const plan = await PlanModel.viewAPlan(new ObjectId(plan_id));
+        if(!plan) throw new ValidationError("Plan not found");
+
+        const pricing = await PricingModel.getPricing(new ObjectId(pricing_id));
+        if(!pricing) {
+            throw new ValidationError("Pricing not found");
+        }
+
+        const sanitized = {
+            member_id: id,
+            plan_id: new ObjectId(plan_id),
+            pricing_id: new ObjectId(pricing_id),
+            status: status.trim().toLowerCase(), // draft | paid | pending_discount_review | ready_for_payment
+            member_type: member_type.trim().toLowerCase() ?? "regular",
+            request_type: "creation",
+            createdAt: new Date(),
+            createdBy: id,
+            updatedAt: null,
+            updatedBy: null
+        }
+
+        return await AuditLogsService.auditWrap({
+            action: "REQUESTED_FOR_MEMBERSHIP",
+            entity: "memberships_request",
+            actor: { id: id, role: updater.role }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} requested for an membership`,
+            fn: async () => {
+                return await MembershipRequestModel.createMembershipRequest(sanitized, session)
+            }
+        });
+    }
+    
+    async createMembershipRequest(meta, body, updater) {
+        let { member_id, plan_id, pricing_id, member_type, status } = body;
+        let creator = updater.id;
+
+        if(!member_id || !ObjectId.isValid(member_id)) {
+            throw new ValidationError("Invalid member ID");
+        }
+
+        const member = await MemberModel.findUserById(new ObjectId(member_id));
+        if(!member) {
+            throw new ValidationError("No member found")
+        }
+
+        if(!plan_id || !ObjectId.isValid(plan_id)) {
+            throw new ValidationError("Invalid plan ID");
+        }
+
+        if(!pricing_id || !ObjectId.isValid(pricing_id)) {
+            throw new ValidationError("Invalid pricing ID");
+        }
+
+        if(!creator || !ObjectId.isValid(creator)) {
+            throw new ValidationError("Invalid admin ID");
+        }
+        
+        if(!member_type) {
+            throw new ValidationError("Request type is required");
+        }
+
+        if(!status) {
+            throw new ValidationError("Status is required");
+        }
+
+        const plan = await PlanModel.viewAPlan(new ObjectId(plan_id));
+        if(!plan) throw new ValidationError("Plan not found");
 
         const pricing = await PricingModel.getPricing(new ObjectId(pricing_id));
 
         if(!pricing) {
-            throw new Error("Pricing not found");
+            throw new ValidationError("Pricing not found");
         }
 
         const sanitized = {
             member_id: new ObjectId(member_id),
             plan_id: new ObjectId(plan_id),
             pricing_id: new ObjectId(pricing_id),
-            status: "pending",
-            type: type.trim().toLowerCase(),
+            status: "draft", // draft | paid | pending_discount_review | ready_for_payment
+            member_type: member_type.trim().toLowerCase() ?? "regular",
             createdAt: new Date(),
             createdBy: new ObjectId(creator),
-            updatedAt: new Date(),
-            updatedBy: new ObjectId(creator)
+            updatedAt: null,
+            updatedBy: null
         }
         
-        return await MembershipRequestModel.createMembershipRequest(sanitized);
+        return await AuditLogsService.auditWrap({
+            action: "MEMBERSHIP_REQUEST_CREATED",
+            entity: "memberships_request",
+            actor: { id: new ObjectId(updater.id), role: updater.role }, 
+            meta: meta,
+            summary: `Membership request was created ${member.first_name} ${member.last_name} by ${updater.first_name} ${updater.last_name}`,
+            fn: async () => {
+                return await MembershipRequestModel.createMembershipRequest(sanitized);
+            }
+        });
+        
     }
 
     async createMembership(id) {
@@ -284,13 +373,12 @@ class MembershipService {
         };
 
         const createMembershipRequest = async (statusValue) => {
-            const type = String(body.type || null).trim().toLowerCase();
             const sanitizedRequest = {
                 member_id,
                 plan_id: new ObjectId(membership.plan_id),
                 pricing_id: new ObjectId(membership.pricing_id),
                 status: statusValue,
-                type,
+                request_type: "cancellation",
                 createdAt: new Date(),
                 createdBy: new ObjectId(updater.id),
                 updatedAt: new Date(),

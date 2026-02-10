@@ -4,7 +4,7 @@ import { ValidationError } from "../errors/ValidationError.js";
 
 class ClassModel {
     async createClass(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("classes").insertOne(data);
 
@@ -16,7 +16,7 @@ class ClassModel {
     }
 
     async viewClassByName(name) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         return await db.collection("classes").findOne({      name: name,
             active: { $ne: "archived" }
@@ -24,7 +24,7 @@ class ClassModel {
     }
 
     async viewClass(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("classes").findOne({ _id: id });
 
@@ -36,7 +36,7 @@ class ClassModel {
     }
 
     async viewAllClass(filter, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const skip = (page - 1) * limit
 
         const result = await db.collection("classes").aggregate([
@@ -82,7 +82,7 @@ class ClassModel {
     }
 
     async updateClass(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("classes").findOneAndUpdate(
             { _id: id },
@@ -98,7 +98,7 @@ class ClassModel {
     }
 
     async updateClassStatus(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("classes").findOneAndUpdate(
             { _id: id },

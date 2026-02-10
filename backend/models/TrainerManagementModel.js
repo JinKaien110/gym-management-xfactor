@@ -4,7 +4,7 @@ import { debuggerLog } from "../utils/debuggerLog.js";
 
 class TrainerManagementModel {
     async createTrainer(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const trainer = await db.collection("trainers").insertOne(data);
 
@@ -19,15 +19,23 @@ class TrainerManagementModel {
     }
 
     async findTrainerByEmail(email) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const trainer = await db.collection("trainers").findOne({email})
 
         return trainer;
     }
 
+    async findTrainerById(id) {
+        const { db } = await connectDB();
+
+        const trainer = await db.collection("trainers").findOne({ _id: id })
+
+        return trainer;
+    }
+
     async listTrainers(filter, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const pipeline = [
             { $match: filter },
@@ -85,7 +93,7 @@ class TrainerManagementModel {
     }
 
     async getTrainer(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         
         const result = await db.collection("trainers").findOne(
             { _id: id },
@@ -98,7 +106,7 @@ class TrainerManagementModel {
     }
 
     async updateTrainerProfile(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         
 
         const result = await db.collection("trainers").findOneAndUpdate(
@@ -115,7 +123,7 @@ class TrainerManagementModel {
     }
     
     async updateTrainerStatus(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("trainers").findOneAndUpdate(
             { _id: id },
@@ -131,7 +139,7 @@ class TrainerManagementModel {
     }
 
     async removeTrainerFromMembers(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("members").updateMany(
             { trainer_id: id },
@@ -141,52 +149,36 @@ class TrainerManagementModel {
         return result.modifiedCount;
     }
 
-    async assignMember(id, member, data) {
-        const db = await connectDB();
-        let result;
-        const memberUpdate = await db.collection("members").findOneAndUpdate(
-                    { _id: member },
-                    { $set: 
-                        { trainer_id: id, 
-                            ...data
-                        } 
-                    },
-                    { returnDocument: "after",
-                        projection: { password: 0 }
-                    }
-                );
+    async assignMember(id, trainer_id, adminId, session = null) {
+        const { db } = await connectDB();
 
-                if(!memberUpdate) {
-                    throw new Error("Failed to assign member");
+        const result = await db.collection("trainers").findOneAndUpdate(
+            { _id: trainer_id },
+            { 
+                $addToSet: {
+                    assigned_members: id
+                },
+                $set: {
+                    updatedAt: new Date(),
+                    updatedBy: adminId ?? id
                 }
-
-                const trainerUpdate = await db.collection("trainers").findOneAndUpdate(
-                    { _id: id },
-                    { 
-                        $addToSet: {
-                            assigned_members: member
-                        },
-                        $set: data
-                    },
-                    { returnDocument: "after",
-                        projection: { password: 0 }
-                     }
-                );
-
-                if(!trainerUpdate) {
-                    throw new Error("Failed to assign member");
-                }
+            },
+            {   returnDocument: "after",
+                projection: { password: 0 },
+                ...(session ? { session } : {}),
+            }
                 
-                result = {
-                    member: memberUpdate,
-                    trainer: trainerUpdate
-                }
+        );
 
+        if(!result) {
+            throw new Error("Failed to assign member");
+        }
+        
         return result;
     }
     
     async removeMember(id, member, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const trainerUpdate = await db.collection("trainers").findOneAndUpdate(
             { _id: id },

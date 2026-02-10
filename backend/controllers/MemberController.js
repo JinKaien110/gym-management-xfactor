@@ -1,95 +1,110 @@
 import dotenv from "dotenv";
 import { debuggerLog } from "../utils/debuggerLog.js";
 import MemberModel from "../models/MemberModel.js";
+import MemberService from "../services/member.service.js";
 
 dotenv.config();
 
 class MemberController {
 
-    async PostForm(req, res) {
+    async PostForm(req, res, next) {
         try {
-            const { gender, date_of_birth, height, weight, bmi, fitness_goal, medical_condition } = req.body;
-            const userId = req.user.id;
-
-            if(!gender, !date_of_birth, !height, !weight, !bmi, !fitness_goal) {
-                return res.status(401).json({ message: "Please fillout the necessary fields!"});
-            }
-
-            const dob = new Date(date_of_birth);
-
-            if(isNaN(dob.getTime())) {
-                return res.status(400).json({ message: "Invalid date format for DOB" });
-            }
-
-            const today = new Date();
-            if(dob > today) {
-                return res.status(400).json({ message: "DOB cannot be in the future" });
-            }
-
-            const ageDiff = today.getFullYear() - dob.getFullYear();
-            if(ageDiff < 12 || ageDiff > 100) {
-                return res.status(400).json({ message: "Unrealistic Age"});
-            }
-
-            if(!Array.isArray(fitness_goal)) {
-                return res.status(400).json({ message: "Fitness goals must be an array" });
-            }
-
-            const sanitized = {
-                gender: gender.trim().toLowerCase(),
-                date_of_birth: dob,
-                height: Number(height),
-                weight: Number(weight),
-                bmi: Number(bmi.toFixed(1)),
-                fitness_goal: Array.isArray(fitness_goal)
-                    ? fitness_goal.map(f => f.trim().toLowerCase())
-                    : [fitness_goal.trim().toLowerCase()],
-                medical_condition: medical_condition?.trim(),
-                qr_code: null,
-                updatedAt: new Date()
-            }
-
-            
-
-            const UpdateMemberDetails = await MemberModel.PostForm(sanitized, userId);
-
-            if(!UpdateMemberDetails) {
-                debuggerLog("Post Form Controller", UpdateMemberDetails);
-                return res.status(401).json({ message: UpdateMemberDetails});
-            }
-
-            res.status(200).json({ message: "Successfully updated member record!"});
+            const result = await MemberService.PostForm(req.body, req.auditMeta, req.user);
+            return res.status(200).json({ message: "Successfully updated member record!", result});
 
         } catch (error) {
             debuggerLog("Post Form Controller", error);
-            return res.status(500).json({ message: "Server Error"});
+            next(error);
         }
     } 
 
-    async allTrainers(req, res) {
+    async selectTrainer(req, res, next) {
         try {
-            const user = await MemberModel.FindUserById(req.user.id);
-            const availability = await MemberModel.getAvailableTrainers(user.fitness_goal);
-
-            res.status(200).json(availability);
-
-        } catch {
-            debuggerLog("allTrainers Controller", error);
-            return res.status(500).json({ message: "Server Error"});
+            const result = await MemberService.selectTrainer(req.params.id, req.auditMeta, req.user);
+            
+            return res.status(200).json({ message: "You have now a trainer", result });
+        } catch (error) {
+            debuggerLog("selectTrainer Controller", error);
+            next(error)
         }
     }
 
-    async assignedTrainers(req, res) {
+    async listOfTrainersAfterPostForm(req, res, next) {
         try {
-            const { trainer_id } = req.body;
-            const userId = req.user.id;
+            const result = await MemberService.listOfTrainersAfterPostForm(req.user);
 
-            const assigning = await MemberModel.assignedTrainer(userId, trainer_id);
-            
-            res.status(200).json({ message: "You have now a trainer", assigning });
+            return res.status(200).json(result);
+
         } catch (error) {
-            debuggerLog("assignedTrainers Controller", error);
-            return res.status(500).json({ message: "Server Error"});
+            debuggerLog("listOfTrainersAfterPostForm Controller" + error.message);
+            next(error)
+        }
+    }
+
+
+    /**
+     * ADMIN FUNCTIOSN BELOW
+     */
+
+    async createMember(req, res, next) {
+        try {
+            const result = await MemberService.createMember(req.body, req.auditMeta, req.user);
+            return res.status(201).json({ message: "Successfully created a member", result});
+        } catch (error) {
+            debuggerLog("createMember Controller: ", error);
+            next(error);
+        }
+    }
+
+    async listMembers(req, res, next) {
+        try {
+            const result = await MemberService.listMembers(req.query);
+            return res.status(200).json(result);
+        } catch (error) {
+            debuggerLog("listMembers Model: ", error);
+            next(error);
+        }
+    }
+
+    async viewMember(req, res, next) {
+        try {
+            const result = await MemberService.viewMember(req.params.id)
+            return res.status(200).json(result);
+        } catch (error) {
+            debuggerLog("viewMember Model: ", error);
+            next(error);
+        }
+    }
+
+    async updateMemberProfile(req, res, next) {
+        try {
+            const result = await MemberService.updateMemberProfile(req.params.id, req.body, req.auditMeta, req.user);
+            return res.status(202).json({ message: "Successfully updated the member details", result});
+ 
+        } catch (error) {
+            debuggerLog("updateMemberProfile Model: ", error);
+            next(error)
+        }
+    }
+
+    async updateUserStatus(req, res, next) {
+        try {
+            const result = await MemberService.updateUserStatus(req.params.id, req.body.status, req.auditMeta, req.updater);
+            return res.status(200).json({ message: "Successfully updated member and membership status", result});
+        } catch (error) {
+            debuggerLog("updateUserStatus Model: ", error);
+            next(error)
+        }
+    }
+
+    async assignATrainer(req, res, next) {
+        try {
+            const result = await MemberService.assignATrainer(req.params.id, req.body.status, req.auditMeta, req.updater)
+            return res.status(200).json({ message: `Successfully assigned a trainer`, result });
+            
+        } catch (error) {
+            debuggerLog("assignATrainer Model: ", error);
+            next(error)
         }
     }
 }

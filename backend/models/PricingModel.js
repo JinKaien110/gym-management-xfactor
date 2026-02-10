@@ -5,7 +5,7 @@ import { debuggerLog } from "../utils/debuggerLog.js";
 
 class PricingModel {
     async getPricing(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("pricing").findOne({ _id: id });
 
@@ -13,7 +13,7 @@ class PricingModel {
     }
 
     async createPricing(pricingData) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const result = await db.collection("pricing").insertOne(pricingData)
 
         if(!result.acknowledged) throw new ValidationError("Pricing insertion failed");
@@ -22,7 +22,7 @@ class PricingModel {
     }
 
     async viewAllPricing(filter, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const prices = await db.collection("pricing").aggregate([
             { $match: filter },
@@ -52,7 +52,7 @@ class PricingModel {
     }
 
     async viewOnePricing(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("pricing").findOne({ _id: id });
 
@@ -64,7 +64,7 @@ class PricingModel {
     }
 
     async viewPricingByPlan(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("pricing").aggregate([
             {
@@ -132,7 +132,7 @@ class PricingModel {
     }
 
     async updatePricing(priceData) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const { _id, ...fieldsToUpdate } = priceData;
 
@@ -150,7 +150,7 @@ class PricingModel {
     }
 
     async updatePricingStatus(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const { _id, ...fieldsToUpdate } = data;
 

@@ -1,9 +1,10 @@
 import { ObjectId } from "mongodb";
 import { connectDB } from "../config/db.js";
+import { ValidationError } from "../errors/ValidationError.js";
 
 class MembershipRequestModel {
     async findMembershipByRequestId(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("memberships_request").findOne({ _id: id });
 
@@ -13,14 +14,18 @@ class MembershipRequestModel {
 
         return result;
     }
+    
 
-    async createMembershipRequest(data) {
-        const db = await connectDB();
+    async createMembershipRequest(data, session = null) {
+        const { db } = await connectDB();
 
-        const result = await db.collection("memberships_request").insertOne(data);
+        const result = await db.collection("memberships_request").insertOne(
+            data,
+            { ...(session ? { session } : {} ) }
+        );
 
         if(!result || !result.acknowledged) {
-            throw new Error("Error inserting membership");
+            throw new ValidationError("Error inserting membership");
         }
         
         return {
@@ -30,7 +35,7 @@ class MembershipRequestModel {
     }
 
     async updateMembershipStatus(id, status) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("memberships_request").findOneAndUpdate(
             { _id: id },

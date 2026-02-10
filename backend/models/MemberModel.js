@@ -9,7 +9,7 @@ import { ValidationError } from "../errors/ValidationError.js";
 class MemberModel {
 
     async RegisterUser(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const result = await db.collection("members").insertOne(data);
 
         return {
@@ -18,49 +18,53 @@ class MemberModel {
         };
     }
 
-    async FindUserById(id) {
-        const db = await connectDB();
-        const result = await db.collection("members").findOne(
-            { _id: new ObjectId(id) },
-            { projection: { password: 0 } }
-        );
+    async findUserByEmail(email) {
+        const { db } = await connectDB();
 
-        if(!result) {
-            throw new ValidationError("Failed to find user by ID");
-        }
+        const result = await db.collection("members").findOne(
+            { email: email },
+            { projection: { password: 0 } }
+        )
 
         return result;
     }
 
-    async PostForm(UserData, id) {
-        const db = await connectDB();
-        const qr = await generateQrCode(id);
+    async PostForm(id, data) {
+        const { db } = await connectDB();
 
-        const newUser = {
-            gender: UserData.gender?.trim().toLowerCase() || null,
-            date_of_birth: UserData.date_of_birth ? Number(UserData.date_of_birth) : null,
-            height: UserData.height ? Number(UserData.height) : null,
-            weight: UserData.weight ? Number(UserData.weight) : null,
-            bmi: UserData.bmi ? Number(UserData.bmi.toFixed(1)) : null,
-            fitness_goal: UserData.fitness_goal?.trim() || null,
-            medical_condition: UserData.medical_condition?.trim() || null,
-            qr_code: qr,
-            updatedAt: new Date(),
-            updatedBy: new ObjectId(id)
-        }
-
-        const memberupdate = await db.collection("members").updateOne(
+        const result = await db.collection("members").findOneAndUpdate(
             { _id: new ObjectId(id) },
-            { $set:  newUser }
+            { $set:  data },
+            { returnDocument: "after" }
             )
 
-            if(memberupdate.acknowledged) {
-            return memberupdate;
-        }
+            if(!result) {
+                throw new ValidationError("Failed to post form");
+            }
+
+            return result;
+    }
+
+    async listOfTrainersAfterPostForm(fitness_goal) {
+        const { db } = await connectDB();
+
+        const result = await db
+        .collection("trainers")
+        .find({
+            specialization: { $in: fitness_goal },
+            $expr: {
+                $lt: [
+                    { $size: { $ifNull: ['$assigned_members', []] } },
+                    "$max_members"
+                ]
+            } })
+        .toArray();
+
+        return result;
     }
 
     async getAvailableTrainers(fitnessGoal) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const result = await db.collection("trainers").aggregate([
             {
                 $addFields: {
@@ -77,55 +81,216 @@ class MemberModel {
         return result;
     }
 
-    async assignedTrainer(memberId, trainer_id) {
-       const db = await connectDB();
-       const session = db.client.startSession();
+   
 
-       try {
-        let result;
+    /**
+     * 
+     * ADMIN FUNCTIONS BELOW
+     * 
+     */
 
-        await session.withTransaction(async () => {
-            const membersCollection = db.collection("members");
-            const trainersCollection = db.collection("trainers");
-            
-            const member = await membersCollection.findOne(
-                { _id: new ObjectId(memberId) },
-                { session }
-            );
+    async createMember(data) {
+        const { db } = await connectDB();
 
-            if(!member) throw new Error("Member not found");
-            if(member.trainer_id) throw new Error("Member already has a trainer");
+        const result = await db.collection("members").insertOne(data);
 
-            const assignMemberResult = await membersCollection.updateOne(
-                { _id: new ObjectId(memberId) },
-                { $set: { trainer_id: new ObjectId(trainer_id), updatedAt: new Date() } },
-                { session }
-            );
+        if(!result || !result.acknowledged) {
+            throw new ValidationError("Failed to create the user");
+        }
 
-            if(!assignMemberResult.acknowledged) throw new Error("Failed to assign a trainer");
+        return {
+            _id: result.insertedId,
+            ...data
+        };
+    }
 
-            const assignTrainerResult = await trainersCollection.updateOne(
-                { _id: new ObjectId(trainer_id) },
-                {
-                    $addToSet: { assigned_members: new ObjectId(memberId) },
-                    $set: { updatedAt: new Date() }
-                },
-                { session }
-            );
+    async findUserById(id) {
+        const { db } = await connectDB();
 
-            if(!assignTrainerResult.acknowledged) throw new Error("Failed to add members in trainers array");
+        const result = await db.collection("members").findOne(
+            { _id: new ObjectId(id) },
+            { projection: { password: 0 } }
+    );
 
-            result = { message: "Trainer assigned successfully" };
+        return result;
+    }
+
+    async findUserByMembership(id) {
+        const { db } = await connectDB();
+
+        const result = await db.collection("membership").findOne({
+            member_id: new ObjectId(id)
         });
 
         return result;
+    }
 
-       } catch (error) {
-            debuggerLog("assignedTrainer Model", error);
-            throw error;
-       } finally {
-        await session.endSession();
-       }
+    
+
+    async listMembers(filter, search, page, limit) {
+        const { db } = await connectDB();
+
+        const pipeline = [
+            { $match: filter },
+
+            {
+                $addFields: {
+                    statusPriority: {
+                        $switch: {
+                            branches: [
+                                { case: { $eq: ["$status", "active"] }, then: 1 },
+                                { case: { $eq: ["$status", "inactive"] }, then: 2 },
+                                { case: { $eq: ["$status", "archived"] }, then: 3 }
+                            ],
+                            default: 4
+                        }
+                    }
+                }
+            },
+
+            { $sort: { statusPriority: 1, createdAt: -1 } },
+
+
+            {
+                $addFields: {
+                    full_name: {
+                        $concat: [
+                            { $ifNull: ["$first_name", ""] },
+                            " ",
+                            { $ifNull: ["$last_name", ""] }
+                        ]
+                    }
+                }
+            },
+        ];
+
+
+        if (search) {
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { first_name: { $regex: search, $options: "i" } },
+                        { last_name: { $regex: search, $options: "i" } },
+                        { full_name: { $regex: search, $options: "i" } }
+                    ]
+                }
+            });
+        }
+
+
+
+        pipeline.push(
+            {
+                $lookup: {
+                    from: "plans",
+                    localField: "plan_id",
+                    foreignField: "_id",
+                    as: "plan"
+                }
+            },
+            { $unwind: { path: "$plan", preserveNullAndEmptyArrays: true } },
+
+            {
+                $facet: {
+                    data: [
+                        { $skip: (page - 1) * limit },
+                        { $limit: limit }
+                    ],
+                    totalCount: [
+                        { $count: "count" }
+                    ]
+                }
+            }
+        );
+
+        const result = await db.collection("members").aggregate(pipeline).toArray();
+
+        if(!result) {
+            throw new ValidationError("Error fetching all members");
+        }
+
+        const members = result[0].data;
+        const total = result[0].totalCount[0]?.count || 0;
+
+        return {
+            members,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        }
+    }
+
+    async viewMember(id) {
+        const { db } = await connectDB();
+
+        const result = await db.collection("members").findOne({ _id: id });
+
+        if(!result) {
+            throw new ValidationError("Error finding one member");
+        }
+
+        return result;
+    }
+
+    async updateMember(id, data, session = null) {
+        const { db } = await connectDB();
+
+        const result = await db.collection("members").findOneAndUpdate(
+            { _id: new ObjectId(id) },
+            { $set: data },
+            { 
+                returnDocument: "after",
+                ...(session ? { session } : {}) 
+            }
+        );
+
+        if(!result) throw new ValidationError("Failed to update member");
+
+        return result;
+    }
+
+    async updateUserStatus(id, status, session = null) {
+        const { db } = await connectDB();
+
+        const result = await db.collection("members").findOneAndUpdate(
+            { _id: id },
+            { $set: status },
+            { 
+                returnDocument: "after",
+                projection: { password: 0 },
+                ...(session ? { session } : {}) 
+            }
+        );
+
+        return result;
+    }
+
+    async assignATrainer(id, trainer_id, adminId, session = null) {
+        const { db } = await connectDB();
+
+        const result = await db.collection("members").findOneAndUpdate(
+            { _id: id },
+            {
+                $set: {
+                    trainer_id: trainer_id,
+                    updatedAt: new Date(),
+                    updatedBy: adminId ?? id
+                }
+            },
+            {
+                returnDocument: "after",
+                projection: { password: 0 },
+                ...(session ? { session } : {} )
+            }
+        );
+
+        if(!result) {
+            throw new ValidationError("Failed to process memberUpdate");
+        }
+        
+
+        return result;
     }
 }
 

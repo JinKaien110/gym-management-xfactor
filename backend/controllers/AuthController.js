@@ -66,7 +66,7 @@ class AuthController {
 
     async Me(req, res, next) {
         try {
-            const user = await MemberModel.FindUserById(req.user.id);
+            const user = await MemberModel.findUserById(req.user.id);
 
             if(!user) throw new ValidationError("User not found");
 

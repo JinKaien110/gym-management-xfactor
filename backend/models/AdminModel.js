@@ -5,7 +5,7 @@ import { ValidationError } from "../errors/ValidationError.js";
 
 class AdminModel {
     async viewAdmin(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection('member').findOne({ _id: id });
 
@@ -13,7 +13,7 @@ class AdminModel {
     }
 
     async viewAdminByEmail(email) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection('member').findOne({ email });
 
@@ -21,7 +21,7 @@ class AdminModel {
     }
 
     async createAdmin(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection('member').insertOne(data);
 
@@ -34,7 +34,7 @@ class AdminModel {
     }
 
     async updatePassword(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection('member').findOneAndUpdate(
             { _id: id },

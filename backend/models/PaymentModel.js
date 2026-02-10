@@ -3,7 +3,7 @@ import { connectDB } from "../config/db.js";
 
 class PaymentModel {
     async createPayment(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("payments").insertOne(data);
 
@@ -15,7 +15,7 @@ class PaymentModel {
     }
 
     async updateStatusByExternalID(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("payments").updateOne(
             { external_id: id },
@@ -30,7 +30,7 @@ class PaymentModel {
     }
 
     async findByExternalID(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("payments").findOne({ external_id: id });
 
@@ -42,7 +42,7 @@ class PaymentModel {
     }
 
     async getAllPayment(filter, search, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         page = Number(page);
         limit = Number(limit);
         const skip = (page - 1) * limit;
@@ -134,7 +134,7 @@ class PaymentModel {
     }
 
     async getPaymentDetails(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const pipeline = [
             { $match: { _id: id } },

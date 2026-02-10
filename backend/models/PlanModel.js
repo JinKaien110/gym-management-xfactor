@@ -3,7 +3,7 @@ import { connectDB } from "../config/db.js";
 
 class PlanModel {
     async createPlans(plandata) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const result = await db.collection("plans").insertOne(plandata);
 
         if(!result.acknowledged) {
@@ -17,7 +17,7 @@ class PlanModel {
     }
     
     async viewAllPlans(filter, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const plans = await db.collection("plans")
             .aggregate([
             { $match: filter },
@@ -51,7 +51,7 @@ class PlanModel {
     }
 
     async viewAPlan(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const result = await db.collection("plans").findOne({ _id: id});
 
         if(!result) throw new ValidationError("No plan found");
@@ -60,7 +60,7 @@ class PlanModel {
     }
 
     async updatePlan(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const result = await db.collection("plans").updateOne(
             { _id: id},
             { $set: data}
@@ -79,7 +79,7 @@ class PlanModel {
     }
 
     async updatePlanStatus(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const result = await db.collection("plans").updateOne(
             { _id: id },
             { $set: data }

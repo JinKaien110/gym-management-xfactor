@@ -79,7 +79,7 @@ class TrainerManagementController {
 
     async assignMember(req, res) {
         try {
-            const result = await TrainerService.assignMember(req.params.id, req.body, req.user.id);
+            const result = await TrainerService.assignMember(req.params.id, req.body, req.user);
 
             return res.status(200).json({ message: "Successfully added the member", result});
         } catch (error) {

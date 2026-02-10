@@ -4,7 +4,7 @@ import { ValidationError } from "../errors/ValidationError.js";
 
 class AIRecommendationModel {
     async findById(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("workout_recommendations").findOne(id)
 
@@ -12,7 +12,7 @@ class AIRecommendationModel {
     }
 
     async requestRecommendation(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("workout_recommendations").insertOne(data)
 
@@ -29,7 +29,7 @@ class AIRecommendationModel {
     }
 
     async decisionRecommendationByTrainer(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("workout_recommendations").findOneAndUpdate(
             { _id: id },
@@ -45,7 +45,7 @@ class AIRecommendationModel {
     }
 
     async findLatestByParentId(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         return await db.collection("workout_recommendations").findOne(
             { parent_id: id },
@@ -62,7 +62,7 @@ class AIRecommendationModel {
     }
 
     async listTrainerPendingRecommendations(id, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const skip = (page - 1) * limit
 
         const data = await db.collection("workout_recommendations").find({ 
@@ -89,7 +89,7 @@ class AIRecommendationModel {
     }
 
     async listAllRecommendations(filter, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const skip = (page - 1) * limit
 
         const data = await db.collection("workout_recommendations")
@@ -121,7 +121,7 @@ class AIRecommendationModel {
     }
 
     async getRecommendationChain(id) {
-        const db = await connectDB()
+        const { db } = await connectDB()
 
         const versions = await db.collection("workout_recommendations")
         .find({

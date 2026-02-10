@@ -7,6 +7,8 @@ import { ObjectId } from "mongodb";
 import { generateToken } from "../utils/generateToken.js";
 import { hashedPassword } from "../utils/hashedPassword.js";
 import checkDuplicate from "../utils/checkDuplicate.js";
+import MembershipModel from "../models/MembershipModel.js";
+import MembershipService from "./membership.service.js";
 
 
 class AuthService {
@@ -93,8 +95,8 @@ class AuthService {
     }
 
     async RegisterUser(meta, body) {
-        const { email, first_name, last_name, phone, password } = body;
-        if(!email?.trim() || !password?.trim() || !first_name?.trim() || !last_name?.trim() || !phone?.trim()) {
+        const { email, first_name, last_name, phone, password, member_type } = body;
+        if(!email?.trim() || !password?.trim() || !first_name?.trim() || !last_name?.trim() || !phone?.trim() || !member_type) {
             throw new ValidationError("Please fillout the necessary field.");
         }
 
@@ -111,7 +113,7 @@ class AuthService {
             password: hash,
             role: "member",
             status: "active",
-            member_type: null,
+            member_type: member_type.trim().toLowerCase(),
             gender: null,
             date_of_birth: null,
             height: null,
@@ -142,7 +144,22 @@ class AuthService {
             meta: meta,
             summary: `${email.trim().toLowerCase()} has registered`,
             fn: async () => {
-                return await MemberModel.RegisterUser(sanitized);
+                const { client } = await connectDB();
+                const session = client.startSession();
+
+                try {
+                    session.startTransaction();
+
+                    const updater = await MemberModel.RegisterUser(sanitized, session);
+                    await MembershipService.createMembershipRequest(meta, body, updater, session)
+                    await session.commitTransaction();
+                } catch (error) {
+                    await session.abortTransaction();
+                    throw new ValidationError(error.message)
+                } finally {
+                    await session.endSession();
+                }
+                return;
             }
         });
     } 

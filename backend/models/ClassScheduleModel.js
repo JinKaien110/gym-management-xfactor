@@ -5,7 +5,7 @@ import { ValidationError } from "../errors/ValidationError.js";
 
 class ClassScheduleModel {
     async createClassSchedule(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("class_schedule").insertOne(data);
 
@@ -17,7 +17,7 @@ class ClassScheduleModel {
     }
 
     async checkScheduleIfAlreadyExist(id, start_at) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("class_schedule").findOne({
             class_id: id,
@@ -29,7 +29,7 @@ class ClassScheduleModel {
     }
 
     async viewClassSchedule(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("class_schedule").findOne(id);
 
@@ -41,7 +41,7 @@ class ClassScheduleModel {
     }
     
     async viewAllClassSchedule(filter, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const skip = (page - 1) * limit;
 
         const result = await db.collection("class_schedule").aggregate([
@@ -88,7 +88,7 @@ class ClassScheduleModel {
     }
     
     async updateClassSchedule(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("class_schedule").findOneAndUpdate(
             { _id: id },
@@ -104,7 +104,7 @@ class ClassScheduleModel {
     }
 
     async updateClassScheduleStatus(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("class_schedule").findOneAndUpdate(
             { _id: id },
@@ -120,7 +120,7 @@ class ClassScheduleModel {
     }
 
     async viewClassScheduleAssignedToMe(id, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const skip = (page - 1) * limit;
         const result = await db.collection("class_schedule")

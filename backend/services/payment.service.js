@@ -78,6 +78,7 @@ class PaymentService {
             external_id: external_id,
             amount: amount,
             status: "PENDING",
+            member_type: "regular", 
             payment_method: payment_method,
             membership_request_id: id,
             raw_response: response.data,

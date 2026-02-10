@@ -1,3 +1,4 @@
+import { ValidationError } from "../errors/ValidationError.js";
 import PaymentService from "../services/payment.service.js";
 import { debuggerLog } from "../utils/debuggerLog.js";
 
@@ -12,9 +13,9 @@ class PaymentController {
             } else if(req.body.payment_method === "gcash") {
                 result = await PaymentService.createGcashPayment(req.body, req.user)
             } else if(req.body.payment_method === "cash") {
-                throw new Error("Contact staff in the facility");
+                throw new ValidationError("Contact staff in the facility");
             } else {
-                return res.status(400).json({ message: "Invalid payment"});
+                throw new ValidationError("Invalid payment");
             }
 
             return res.status(201).json({ message: "Successfully payment created", checkout_url: result.checkout_url});
@@ -24,7 +25,7 @@ class PaymentController {
         }
     }
 
-    async xenditWebhook(req, res) {
+    async xenditWebhook(req, res, next) {
         try {
             const event = req.body;
             console.log("Reference ID:", event.data.reference_id, typeof event.data.reference_id);
@@ -47,7 +48,7 @@ class PaymentController {
             return res.status(200).send("OK");
         } catch (error) {
             debuggerLog("Webhook Controller" + error.message);
-            return res.status(500).send("Webhook error");
+            next(error)
         }
     }
 

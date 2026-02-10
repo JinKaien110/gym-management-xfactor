@@ -2,7 +2,7 @@ import { connectDB } from "../config/db.js"
 
 class AuditLogModel {
     async create(doc) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const result = await db.collection("audit_logs").insertOne(doc);
 
         if(!result?.acknowledged) {

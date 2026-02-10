@@ -3,7 +3,7 @@ import { ObjectId } from "mongodb";
 
 class CancellationRequestModel {
     async read(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("membership_cancellation_requests").findOne({ _id: id });
 
@@ -11,7 +11,7 @@ class CancellationRequestModel {
     }
 
     async create(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("membership_cancellation_requests").insertOne(data);
         
@@ -23,8 +23,8 @@ class CancellationRequestModel {
     }
 
     async update(id, data) {
-        const db = await connectDB();
-
+        const { db } = await connectDB();
+s
         const result = await db.collection("membership_cancellation_requests").findOneAndUpdate(
             { _id: id },
             { $set: data },

@@ -3,7 +3,7 @@ import { ObjectId } from "mongodb";
 
 class MembershipModel {
     async createMembership(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("memberships").insertOne(data);
 
@@ -15,7 +15,7 @@ class MembershipModel {
     }
 
     async alreadyHaveMembership(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("memberships").findOne(
             { member_id: id,
@@ -27,7 +27,7 @@ class MembershipModel {
     }
 
     async viewMembership(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("memberships").findOne(
             { _id: id }
@@ -41,7 +41,7 @@ class MembershipModel {
     }
 
     async viewAllMembership(filter, search, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         const skip = (page - 1) * limit;
 
         const pipeline = [
@@ -118,7 +118,7 @@ class MembershipModel {
         ];
 
         if(search) {
-            pipeline.push({ 
+            pipeline.unshift({ 
                 $match: { 
                     $or: [
                         {"member.first_name": { $regex: search, $options: "i" } },
@@ -141,13 +141,16 @@ class MembershipModel {
         }
     }
 
-    async updateMembership(id, data) {
-        const db = await connectDB();
+    async updateMembership(id, data, session) {
+        const { db } = await connectDB();
 
         const result = await db.collection("memberships").findOneAndUpdate(
             { _id: id },
             { $set: data },
-            { returnDocument: "after"}
+            { 
+                returnDocument: "after",
+                ...(session ? { session } : {})
+            }
         );
 
         if(!result) {
@@ -157,13 +160,16 @@ class MembershipModel {
         return result;
     }
 
-    async updateMembershipStatus(id, data) {
-        const db = await connectDB();
+    async updateMembershipStatus(id, data, session = null) {
+        const { db } = await connectDB();
 
         const result = await db.collection("memberships").findOneAndUpdate(
             { _id: id },
             { $set: data },
-            { returnDocument: "after" }
+            { 
+                returnDocument: "after",
+                ...(session ? { session } : {})
+             }
         );
 
         if(!result) {
@@ -178,7 +184,7 @@ class MembershipModel {
     }
 
     async freezeMembership(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("memberships").findOneAndUpdate(
             { _id: id },
@@ -194,7 +200,7 @@ class MembershipModel {
     }
 
     async unfreezeMembership(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("memberships").findOneAndUpdate(
             { _id: id },
