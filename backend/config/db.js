@@ -17,7 +17,7 @@ async function connectDB() {
             db: client.db(dbname),
             client
         };
-    } catch {
+    } catch (error) {
         console.error("Database failed to connect: ", error);
         process.exit(1);
     }

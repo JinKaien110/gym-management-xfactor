@@ -1,4 +1,5 @@
 import { ValidationError } from "../errors/ValidationError.js";
+import MembershipService from "../services/membership.service.js";
 import PaymentService from "../services/payment.service.js";
 import { debuggerLog } from "../utils/debuggerLog.js";
 
@@ -9,15 +10,15 @@ class PaymentController {
             let result;
 
             if(req.body.payment_method === "paymaya") {
-                result = await PaymentService.createMayaPayment(req.body, req.user);
+                result = await PaymentService.createMayaPayment(req.auditMeta, req.body, req.user);
             } else if(req.body.payment_method === "gcash") {
-                result = await PaymentService.createGcashPayment(req.body, req.user)
+                result = await PaymentService.createGcashPayment(req.auditMeta, req.body, req.user)
             } else if(req.body.payment_method === "cash") {
                 throw new ValidationError("Contact staff in the facility");
             } else {
                 throw new ValidationError("Invalid payment");
             }
-
+            
             return res.status(201).json({ message: "Successfully payment created", checkout_url: result.checkout_url});
         } catch (error) {
             debuggerLog("createMembershipPayment Controller" + error.data);
@@ -70,6 +71,17 @@ class PaymentController {
             return res.status(200).json(result);
         } catch (error) {
             debuggerLog("getAllPayment Controller" + error.message);
+            next(error)
+        }
+    }
+
+    async getTotalRevenue(req, res, next) {
+        try {
+            const result = await PaymentService.getTotalRevenue(req.query);
+
+            return res.status(200).json(result);
+        } catch (error) {
+            debuggerLog("getTotalRevenue Controller" + error.message);
             next(error)
         }
     }

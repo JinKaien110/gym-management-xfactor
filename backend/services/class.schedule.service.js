@@ -7,7 +7,7 @@ import TrainerManagementModel from "../models/TrainerManagementModel.js";
 
 
 class ClassScheduleService {
-    async createClassSchedule(body, updater) {
+    async createClassSchedule(meta, body, updater) {
         let { class_id, start_at, end_at, capacity, location, notes, trainer_id } = body;
         
         if(!class_id || !start_at || !end_at || !trainer_id) {
@@ -94,7 +94,17 @@ class ClassScheduleService {
             archivedBy: null
         }
 
-        return await ClassScheduleModel.createClassSchedule(data);
+        return await AuditLogsService.auditWrap({
+            action: "CLASS_SCHEDULE_CREATED",
+            entity: "class_schedule",
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} created a class schedule for ${classDocs.name}`,
+            fn: async () => {
+                return await ClassScheduleModel.createClassSchedule(data);
+            }
+        });
+        
      }
 
     async viewClassSchedule(id) {
@@ -136,7 +146,7 @@ class ClassScheduleService {
         return await ClassScheduleModel.viewAllClassSchedule(filter, page, limit);
     }
     
-    async updateClassSchedule(id, body, updater) {
+    async updateClassSchedule(id, meta, body, updater) {
         let { class_id, trainer_id, location, notes, capacity, start_at, end_at } = body;
 
         const data = {};
@@ -218,15 +228,30 @@ class ClassScheduleService {
             scheduleUpdates.updatedAt = new Date()
             scheduleUpdates.updatedBy = new ObjectId(updater.id)
         }
-
-        return await ClassScheduleModel.updateClassSchedule(
-            new ObjectId(id),
-            scheduleUpdates
-        );
+        return await AuditLogsService.auditWrap({
+            action: "CLASS_SCHEDULE_UPDATE",
+            entity: "class_schedule",
+            entity_id: new ObjectId(id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} updated the class schedule ${id.toString()}`,
+            changes: {
+                patch: {
+                    before: schedule,
+                    after: scheduleUpdates
+                }
+            },
+            fn: async () => {
+                return await ClassScheduleModel.updateClassSchedule(
+                    new ObjectId(id),
+                    scheduleUpdates
+                );
+            }
+        });
+        
     }
 
-    async updateClassScheduleStatus(id, status, updater) {
-        console.log(status)
+    async updateClassScheduleStatus(id, meta, status, updater) {
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid class schedule ID");
         }
@@ -267,11 +292,26 @@ class ClassScheduleService {
             data.archivedAt = new Date();;
             data.archivedBy = new ObjectId(updater.id)
         }
-
-        return await ClassScheduleModel.updateClassScheduleStatus(
-            new ObjectId(id),
-            data
-        )
+         return await AuditLogsService.auditWrap({
+            action: "CLASS_SCHEDULE_UPDATE_STATUS",
+            entity: "class_schedule",
+            entity_id: new ObjectId(id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} updated the class schedule ${String(id)}`,
+            changes: {
+                patch: {
+                    before: schedule.status,
+                    after: String(status).trim().toLowerCase()
+                }
+            },
+            fn: async () => {
+                return await ClassScheduleModel.updateClassScheduleStatus(
+                    new ObjectId(id),
+                    data
+                )
+            }
+        });
     }
 
     async viewClassScheduleAssignedToMe(user, query) {

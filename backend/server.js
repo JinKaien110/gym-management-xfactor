@@ -5,6 +5,7 @@ import cors from "cors";
 import { connectDB } from "./config/db.js";
 
 import AuthRoutes from "./routes/authroutes.js";
+import AdminRoutes from "./routes/adminroutes.js";
 import MemberRoutes from "./routes/memberroutes.js";
 import PlanRoutes from "./routes/planroute.js";
 import PricingRoutes from "./routes/pricingroutes.js";
@@ -15,6 +16,8 @@ import AIRoutes from "./routes/airoutes.js";
 import ClassRoutes from "./routes/classroutes.js";
 import ClassScheduleRoutes from "./routes/classscheduleroutes.js";
 import BookingRoutes from "./routes/bookingroutes.js";
+import DiscountRoutes from "./routes/discountroute.js";
+import AuditLogsRoutes from "./routes/auditlogroutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { auditMeta } from "./middleware/auditMeta.js";
 
@@ -31,6 +34,7 @@ app.use(cookieParser());
 app.use(auditMeta)
 
 app.use('/api', AuthRoutes);
+app.use('/api', AdminRoutes);
 app.use('/api',  MemberRoutes);
 app.use('/api',  PlanRoutes);
 app.use('/api',  PricingRoutes);
@@ -41,7 +45,8 @@ app.use('/api', AIRoutes);
 app.use('/api', ClassRoutes);
 app.use('/api', ClassScheduleRoutes);
 app.use('/api', BookingRoutes);
-
+app.use('/api', DiscountRoutes);
+app.use('/api', AuditLogsRoutes);
 
 app.use(errorHandler)
 

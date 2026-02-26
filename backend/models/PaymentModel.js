@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import { connectDB } from "../config/db.js";
+import { ValidationError } from "../errors/ValidationError.js";
 
 class PaymentModel {
     async createPayment(data) {
@@ -8,7 +9,7 @@ class PaymentModel {
         const result = await db.collection("payments").insertOne(data);
 
         if(!result || !result.acknowledged) {
-            throw new Error("Failed to create payments");
+            throw new ValidationError("Failed to create payments");
         }
 
         return result;
@@ -23,7 +24,7 @@ class PaymentModel {
         );
 
         if(!result) {
-            throw new Error("Failed to update the status in payments");
+            throw new ValidationError("Failed to update the status in payments");
         }
 
         return result
@@ -35,7 +36,7 @@ class PaymentModel {
         const result = await db.collection("payments").findOne({ external_id: id });
 
         if(!result) {
-            throw new Error("Failed to update the status in payments");
+            throw new ValidationError("Failed to update the status in payments");
         }
 
         return result
@@ -181,6 +182,19 @@ class PaymentModel {
         const result = await db.collection("payments").aggregate(pipeline).toArray();
 
         return result[0] || null;
+    }
+
+    async getTotalRevenue(filter) {
+        const { db } = await connectDB();
+
+        const result = await db.collection("payments").aggregate([
+            { $match: filter },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]).toArray();
+
+        return {
+            totalRevenue: result[0]?.total || 0
+        };
     }
     
 }

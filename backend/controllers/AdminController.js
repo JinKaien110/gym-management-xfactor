@@ -19,8 +19,8 @@ class AdminController {
 
     async updatePassword(req, res, next) {
         try {
-            const result = await AdminService.updatePassword(req.auditMeta, req.body.password, req.user);
-            return res.status(200).json({ messaage: "Successfully updated password"});
+            const result = await AdminService.updatePassword(req.params.id, req.auditMeta, req.body.password, req.user);
+            return res.status(200).json({ messaage: "Successfully updated password, sent email to the admin", result});
         } catch (error) {
             debuggerLog("AdminController UpdateAdminPassword: " + error);
             next(error)

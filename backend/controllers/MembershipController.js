@@ -11,6 +11,17 @@ class MembershipController {
         try {
             const result = await MembershipService.createMembershipRequest(req.auditMeta, req.body, req.user);
 
+            return res.status(201).json({ message: "Successfully created the membership request", result});
+        } catch (error) {
+            debuggerLog("createMembershipRequest Controller: ", error);
+            next(error)
+        }
+    }
+
+    async createMembership(req, res, next) {
+        try {
+            const result = await MembershipService.createMembership(req.params.id, req.auditMeta, req.user);
+
             return res.status(201).json({ message: "Successfully created the membership", result});
         } catch (error) {
             debuggerLog("createMembership Controller: ", error);
@@ -31,6 +42,7 @@ class MembershipController {
 
     async viewAllMembership(req, res, next) {
         try {
+            
             const result = await MembershipService.viewAllMembership(req.query);
 
             return res.status(200).json(result);
@@ -80,6 +92,17 @@ class MembershipController {
             return res.status(200).json({ message: "Successfully unfreeze the membership", result});
         } catch (error) {
             debuggerLog("unfreezeMembership Controller: ", error);
+            next(error)
+        }
+    }
+
+    async fetchAllMembershipRequests(req, res, next) {
+        try {
+            const result = await MembershipService.fetchAllMembershipRequests(req.query);
+            
+            return res.status(200).json(result);
+        } catch (error) {
+            debuggerLog("fetchAllMembershipRequests Controller: ", error);
             next(error)
         }
     }

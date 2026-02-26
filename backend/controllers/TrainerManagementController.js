@@ -9,7 +9,7 @@ import TrainerService from "../services/trainer.service.js";
 dotenv.config();
 
 class TrainerManagementController {
-    async createTrainer(req, res) {
+    async createTrainer(req, res, next) {
         try {
             const result = await TrainerService.createTrainer(req.body, req.user);
 
@@ -17,93 +17,93 @@ class TrainerManagementController {
 
         } catch (error) {
             debuggerLog("createTrainer Controller" + error.message);
-            return res.status(500).json({ message: "Server Error", error: error.message });
+            next(error);
         }
     }
 
-    async listTrainers(req, res) {
+    async listTrainers(req, res, next) {
         try {
             const result = await TrainerService.listTrainers(req.query);
 
             return res.status(200).json(result);
         } catch (error) {
             debuggerLog("listTrainers Controller" + error.message);
-            return res.status(500).json({ message: "Server Error", error: error.message });
+            next(error);
         }
     }
 
-    async getTrainer(req, res) {
+    async getTrainer(req, res, next) {
         try {
             const result = await TrainerService.getTrainer(req.params.id)
 
             return res.status(200).json(result);
         } catch (error) {
             if (error.message === "No trainer found") {
-                return res.status(404).json({ message: error.message });
+                next(error);
             }
 
             debuggerLog("getTrainer Controller" + error.message);
-            return res.status(500).json({ message: "Server Error", error: error.message });
+            next(error);
         }
     }
 
-    async updateTrainerProfile(req, res) {
+    async updateTrainerProfile(req, res, next) {
         try {
             const result = await TrainerService.updateTrainerProfile(req.params.id, req.body, req.user);
             
             return res.status(200).json({ message: "Successfully updated the trainer", result});
         } catch (error) {
             if (error.message === "Trainer not found") {
-                return res.status(404).json({ message: error.message });
+                next(error);
             }
 
             debuggerLog("getTrainer Controller" + error.message);
-            return res.status(500).json({ message: "Server Error", error: error.message });
+            next(error);
         }
     }
 
-    async updateTrainerStatus(req, res) {
+    async updateTrainerStatus(req, res, next) {
         try {
             const result = await TrainerService.updateTrainerStatus(req.params.id, req.body.status, req.user.id);
 
             return res.status(200).json({ message: "Successfully updated the trainer status", result});
         } catch (error) {
             if (error.message === "Trainer not found") {
-                return res.status(404).json({ message: error.message });
+                next(error);
             }
 
             debuggerLog("getTrainer Controller" + error.message);
-            return res.status(500).json({ message: "Server Error", error: error.message });
+            next(error);
         }
     }
 
-    async assignMember(req, res) {
+    async assignMember(req, res, next) {
         try {
-            const result = await TrainerService.assignMember(req.params.id, req.body, req.user);
+            const result = await TrainerService.assignMember(req.params.id, req.auditMeta, req.body, req.user);
 
             return res.status(200).json({ message: "Successfully added the member", result});
         } catch (error) {
             if (error.message === "Trainer not found") {
-                return res.status(404).json({ message: error.message });
+                next(error);
             }
 
             debuggerLog("assignMember Controller" + error.message);
-            return res.status(500).json({ message: "Server Error", error: error.message });
+            next(error);
         }
     }
 
-    async removeMember(req, res) {
+    async removeMember(req, res, next) {
         try {
-            const result = await TrainerService.removeMember(req.params.id, req.body, req.user);
+            const result = await TrainerService.removeMember(req.params.id, req.auditMeta, req.body, req.user);
 
             return res.status(200).json({ message: "Successfully removed the member", result});
         } catch (error) {
             if (error.message === "Trainer not found") {
-                return res.status(404).json({ message: error.message });
+                next(error);
             }
 
             debuggerLog("removeMember Controller" + error.message);
-            return res.status(500).json({ message: "Server Error", error: error.message });
+            next(error);
         }
     }
 }

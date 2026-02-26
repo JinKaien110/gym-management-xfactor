@@ -1,11 +1,19 @@
 // pages/Dashboard.jsx
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
+import api from "../../api/axios.js";
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+  if (!isAuthenticated) return;
+
+  }, [isAuthenticated]);
+
+  
 
   const handleLogout = async () => {
     await logout();

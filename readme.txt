@@ -1024,10 +1024,24 @@ first_name: first_name.trim(),
 return await AuditLogsService.auditWrap({
   action: "",
   entity: "",
-  actor: { id: new ObjectId(updater.id), role: updater.role }, 
+  actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
   meta: meta,
-  summary: ``,
+  summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type})`,
   fn: async () => {
   
   }
 });
+
+const { client } = await connectDB();
+                const session = client.startSession();
+
+                try {
+                    session.startTransaction();
+
+                    await session.commitTransaction();
+                } catch (error) {
+                    await session.abortTransaction();
+                    throw new ValidationError(error.message)
+                } finally {
+                    await session.endSession();
+                }

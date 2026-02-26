@@ -3,7 +3,12 @@ import { ValidationError } from "../errors/ValidationError.js";
 import BookingModel from "../models/BookingModel.js";
 import ClassScheduleModel from "../models/ClassScheduleModel.js";
 import ClassModel from "../models/ClassModel.js";
-
+import MemberModel from "../models/MemberModel.js";
+import TrainerManagementModel from "../models/TrainerManagementModel.js";
+import { memberJoinBookingEmail } from "../templates/booking/email.memberJoinBooking.js";
+import AuditLogsService from "./audit.logs.service.js"; 
+import { sendEmail } from "./email.service.js";
+import { memberCancelBookingEmail } from "../templates/booking/emaill.memberCancelBooking.js";
 class BookingService {
     async joinBooking(id, meta, updater) {
         if(!id || !ObjectId.isValid(id)) {
@@ -11,8 +16,10 @@ class BookingService {
         }
 
         if(!updater.id || !ObjectId.isValid(updater.id)) {
-            throw new ValidationError("Invalid updater ID");
+            throw new ValidationError("Invalid member ID");
         }
+
+
 
         const schedule = await ClassScheduleModel.viewClassSchedule(new ObjectId(id));
         if(!schedule) {
@@ -33,6 +40,8 @@ class BookingService {
         if(alreadyJoined) {
             throw new ValidationError("You already joined this class schedule");
         }
+
+        const trainer = await TrainerManagementModel.findTrainerById(new ObjectId(schedule.trainer_id))
 
         const joinedCount = await BookingModel.countJoined(new ObjectId(id));
         const capacity = schedule.capacity
@@ -55,13 +64,41 @@ class BookingService {
             updatedAt: null,
             updatedBy: null
         }
+
+        const email = {
+            first_name: updater.first_name,
+            last_name: updater.last_name,
+            status: "joined",
+            name: classes.name,
+            trainer_first_name: trainer.first_name,
+            trainer_last_name: trainer.last_name,
+            start_at: schedule.start_at,
+            location: schedule.location,
+            notes: schedule.notes
+        }
+
         return await AuditLogsService.auditWrap({
-            action: "BOOK_CLASS_SCHEDULE-BOOKING",
+            action: "BOOKING_MEMBER_JOIN",
             entity: "bookings",
-            actor: { id: new ObjectId(updater.id), role: updater.role  }, 
+            entity_id: new ObjectId(id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type  }, 
             meta: meta,
-            summary: `${updater.first_name} (${updater.id}) book the class ${classes.name}`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) book the class ${classes.label}`,
             fn: async () => {
+                await AuditLogsService.auditWrap({
+                    action: "EMAIL_MEMBER_JOINBOOKING",
+                    entity: "admins",
+                    actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+                    meta: meta,
+                    summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) has been sent an email confirmation about booking a ${classes.label} class schedule`,
+                    fn: async () => {
+                        return await sendEmail({
+                            to: updater.email,
+                            subject: "XFactor Fitness Gym Trece - Booking Confirmation",
+                            html: memberJoinBookingEmail(email)
+                        });
+                    }
+                })
                 return await BookingModel.joinBooking(data)
             }
         });
@@ -124,7 +161,7 @@ class BookingService {
         return await BookingModel.viewAllBooking(filter, page, limit)
     }
 
-    async cancelBooking(id, body, updater) {
+    async cancelBooking(id, meta, body, updater) {
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid booking ID");
         }
@@ -165,12 +202,22 @@ class BookingService {
             updatedAt: new Date(),
             updatedBy: new ObjectId(updater.id)
         }
+
+        const email = {
+            first_name: updater.first_name,
+            last_name: updater.last_name,
+            status: "cancelled",
+            name: classes.name,
+            reason: reason ?? null
+        }
+
         return await AuditLogsService.auditWrap({
-            action: "CANCEL_BOOKING_CLASS_SCHEDULE-BOOKING",
+            action: "BOOKING_MEMBER_CANCEL",
             entity: "bookings",
-            actor: { id: new ObjectId(updater.id), role: updater.role  }, 
+            entity_id: new ObjectId(id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
             meta: meta,
-            summary: `${updater.first_name} (${updater.id}) cancel his booking in the class ${classes.name}`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) cancel his booking in the class ${classes.name}`,
             changes: {
                 patch: {
                     before: {
@@ -183,6 +230,21 @@ class BookingService {
                 }
             },
             fn: async () => {
+                await AuditLogsService.auditWrap({
+                    action: "EMAIL_MEMBER_CANCELBOOKING",
+                    entity: "members",
+                    entity_id: new ObjectId(updater._id) ?? null,
+                    actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+                    meta: meta,
+                    summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) has been sent a cancellation booking of ${classes.label}`,
+                    fn: async () => {
+                        return await sendEmail({
+                            to: updater.email,
+                            subject: "XFactor Fitness Gym Trece - Booking Cancellation Confirmation",
+                            html: memberCancelBookingEmail(email)
+                        });
+                    }
+                })
                 return await BookingModel.cancelBooking(
                     new ObjectId(id),
                     data

@@ -1,5 +1,6 @@
 import { connectDB } from "../config/db.js";
 import { ObjectId } from "mongodb";
+import { ValidationError } from "../errors/ValidationError.js";
 
 class CancellationRequestModel {
     async read(id) {
@@ -16,7 +17,7 @@ class CancellationRequestModel {
         const result = await db.collection("membership_cancellation_requests").insertOne(data);
         
         if(!result || !result.acknowledged) {
-            throw new Error("Failed to request m,membership cancellation");
+            throw new ValidationError("Failed to request m,membership cancellation");
         }
 
         return result;
@@ -32,7 +33,7 @@ s
         );
 
         if(!result) {
-            throw new Error("Failed to update membership cancellation");
+            throw new ValidationError("Failed to update membership cancellation");
         }
 
         return result;

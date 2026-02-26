@@ -8,7 +8,7 @@ import { ValidationError } from "../errors/ValidationError.js"; // optional, but
  * - Update: pass id as the document _id string
  */
 export default async function checkDuplicate(id, { email, phone }) {
-  const db = await connectDB();
+  const { db } = await connectDB();
 
   // Normalize inputs (optional but recommended)
   const normalizedEmail = email ? String(email).trim().toLowerCase() : null;

@@ -5,7 +5,7 @@ import { getChangedFields } from "../utils/getChangedFields.js";
 
 
 class ClassService {
-    async createClass(body, updater) {
+    async createClass(meta, body, updater) {
         let { name, default_capacity } = body;
         
         if(!name || !default_capacity === undefined) {
@@ -39,8 +39,16 @@ class ClassService {
             archivedAt: null,
             archivedBy: null
         }
-
-        return await ClassModel.createClass(data);
+        return await AuditLogsService.auditWrap({
+            action: "CLASSES_CREATE",
+            entity: "classes",
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) created a class schedule`,
+            fn: async () => {
+                return await ClassModel.createClass(data);
+            }
+        });
     }
 
     async viewClass(id) {
@@ -70,7 +78,7 @@ class ClassService {
         return await ClassModel.viewAllClass(filter, page, limit);
     }
 
-    async updateClass(id, body, updater) {
+    async updateClass(id, meta, body, updater) {
         let { name, default_capacity } = body;
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid class ID");
@@ -106,16 +114,33 @@ class ClassService {
         const classesUpdates = getChangedFields(isClass, data)
 
         if(!Object.keys(classesUpdates).length) {
-            return existing;
+            return isClass;
         }
 
         classesUpdates.updatedAt = new Date();
         classesUpdates.updatedBy = new ObjectId(updater.id);
 
-        return await ClassModel.updateClass(new ObjectId(id), classesUpdates)
+        return await AuditLogsService.auditWrap({
+            action: "CLASSES_UPDATE",
+            entity: "classes",
+            entity_id: new ObjectId(id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            changes: {
+                patch: {
+                    before: isClass,
+                    after: classesUpdates
+                }
+            },
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated the class ${String(id)}`,
+            fn: async () => {
+                return await ClassModel.updateClass(new ObjectId(id), classesUpdates);
+            }
+        });
+        
     }
 
-    async updateClassStatus(id, body, updater) {
+    async updateClassStatus(id, meta, body, updater) {
         let { status } = body;
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid class ID");
@@ -143,7 +168,7 @@ class ClassService {
         }
 
         if (isClass.status === normalizedStatus) {
-            return existing;
+            return isClass;
         }
 
         const data = {
@@ -157,7 +182,24 @@ class ClassService {
             data.archivedBy = new ObjectId(updater.id);
         }
 
-        return await ClassModel.updateClassStatus(new ObjectId(id), data)
+        return await AuditLogsService.auditWrap({
+            action: "CLASSES_UPDATE_STATUS",
+            entity: "classes",
+            entity_id: new ObjectId(id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            changes: {
+                patch: {
+                    before: isClass.status,
+                    after: normalizedStatus
+                }
+            },
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated the class ${String(id)} status to ${normalizedStatus}`,
+            fn: async () => {
+                return await ClassModel.updateClassStatus(new ObjectId(id), data)
+            }
+        });
+        
     }
 }
 

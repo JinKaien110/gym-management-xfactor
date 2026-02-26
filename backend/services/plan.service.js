@@ -19,11 +19,11 @@ class PlanService {
         }
 
         return await AuditLogsService.auditWrap({
-            action: "CREATE_PLAN",
+            action: "PLAN_CREATED",
             entity: "plans",
-            actor: { id: adminId, role: updater.role }, 
+            actor: { id: adminId, role: updater.role, user_type: updater.user_type }, 
             meta: meta,
-            summary: `${updater.first_name} created a plan`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) created a plan ${name.trim()}`,
             fn: async () => {
 
                 const sanitized = {
@@ -98,11 +98,11 @@ class PlanService {
         sanitized.updatedBy = new ObjectId(adminId);
 
         return await AuditLogsService.auditWrap({
-            action: "UPDATE_PLAN",
+            action: "PLAN_UPDATE",
             entity: "plans",
-            actor: { id: adminId, role: updater.role }, 
+            actor: { id: adminId, role: updater.role, user_type: updater.user_type }, 
             meta: meta,
-            summary: `${updater.first_name} updated a plan`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated the plan ${name} ${label} to ${sanitized.name} ${sanitized.label}`,
             changes: { 
                 patch: {
                     before: {
@@ -166,11 +166,12 @@ class PlanService {
         };
         
         return await AuditLogsService.auditWrap({
-            action: "UPDATE_PLAN_STATUS",
+            action: "PLAN_UPDATE",
             entity: "plans",
-            actor: { id: adminId, role: updater.role  }, 
+            entity_id: new ObjectId(id),
+            actor: { id: adminId, role: updater.role, user_type: updater.user_type  }, 
             meta: meta,
-            summary: `${updater.first_name} updated the ${ifExist.label} plan  status to ${status}`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated the plan ${ifExist.label} plan  status to ${status}`,
             changes: { 
                 patch: {
                     before: {

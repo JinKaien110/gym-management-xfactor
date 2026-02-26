@@ -54,8 +54,6 @@ class PlanModel {
         const { db } = await connectDB();
         const result = await db.collection("plans").findOne({ _id: id});
 
-        if(!result) throw new ValidationError("No plan found");
-
         return result;
     }
 

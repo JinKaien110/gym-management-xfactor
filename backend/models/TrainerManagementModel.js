@@ -1,6 +1,7 @@
 import { connectDB } from "../config/db.js";
 import { ObjectId } from "mongodb";
 import { debuggerLog } from "../utils/debuggerLog.js";
+import { ValidationError } from "../errors/ValidationError.js";
 
 class TrainerManagementModel {
     async createTrainer(data) {
@@ -9,9 +10,9 @@ class TrainerManagementModel {
         const trainer = await db.collection("trainers").insertOne(data);
 
         if(!trainer || !trainer.acknowledged) {
-            throw new Error("Failed to create new trainer");
+            throw new ValidationError("Failed to create new trainer");
         }
-
+        
         return { 
             _id: trainer.insertedId,
             ...data
@@ -29,7 +30,9 @@ class TrainerManagementModel {
     async findTrainerById(id) {
         const { db } = await connectDB();
 
-        const trainer = await db.collection("trainers").findOne({ _id: id })
+        const trainer = await db.collection("trainers").findOne({ _id: id },
+            { projection: { password: 0 } }
+        )
 
         return trainer;
     }
@@ -54,7 +57,7 @@ class TrainerManagementModel {
                 }
             },
             { $sort: { statusPriority: 1, createdAt: -1 } },
-
+            { $project: { password: 0, statusPriority: 0 } },
             {
                 $facet: {
                     data: [
@@ -100,7 +103,7 @@ class TrainerManagementModel {
             { projection: { password: 0 } }
         );
 
-        if(!result) throw new Error("No trainer found");
+        if(!result) throw new ValidationError("No trainer found");
 
         return result
     }
@@ -116,7 +119,7 @@ class TrainerManagementModel {
         );
 
         if(!result) {
-            throw new Error("Failed to update trainer profile")
+            throw new ValidationError("Failed to update trainer profile")
         }
 
         return data;
@@ -132,7 +135,7 @@ class TrainerManagementModel {
         )
 
         if(!result) {
-            throw new Error("Failed to update trainer");
+            throw new ValidationError("Failed to update trainer");
         };
 
         return data;
@@ -171,7 +174,7 @@ class TrainerManagementModel {
         );
 
         if(!result) {
-            throw new Error("Failed to assign member");
+            throw new ValidationError("Failed to assign member");
         }
         
         return result;
@@ -200,11 +203,11 @@ class TrainerManagementModel {
         )
 
         if(!trainerUpdate) {
-            throw new Error("Failed to remove member");
+            throw new ValidationError("Failed to remove member");
         }
 
         if(!memberUpdate) {
-            throw new Error("Failed to remove trainer");
+            throw new ValidationError("Failed to remove trainer");
         }
 
         return {

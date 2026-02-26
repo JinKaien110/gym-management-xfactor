@@ -12,10 +12,19 @@ class DiscountRequestModel {
         return result;
     }
 
-    async findDiscountRequestById(id) {
+    async findDiscountRequestById(id, session = null) {
+        const { db } = await connectDB();
+        const result = await db.collection("decision_requests").findOne({ _id: id },
+            session ? { session } : {}
+        );
+
+        return result;
+    }
+
+    async findDiscountRequestByMembershipRequestId(id) {
         const { db } = await connectDB();
 
-        const result = await db.collection("decision_requests").findOne({ _id: id });
+        const result = await db.collection("decision_requests").findOne({membership_request_id: id });
 
         return result;
     }
@@ -31,8 +40,37 @@ class DiscountRequestModel {
                 ...( session ? { session } : {} )
             }
         );
+        return result;
+    }
+
+    async updateMembershipStatusByMembershipRequestId(id, data) {
+        const { db } = await connectDB();
+
+        const result = await db.collection("decision_requests").findOneAndUpdate(
+            { membership_request_id: id },
+            { $set: data },
+            { returnDocument: "after" }
+        );
 
         return result;
+    }
+
+    async getAllDiscountRequests(filter, page, limit) {
+        const { db } = await connectDB();
+
+        const skip = (page - 1) * limit;
+
+        const results = await db.collection("decision_requests").find(filter).skip(skip).limit(limit).toArray();
+
+        const total = await db.collection("decision_requests").countDocuments(filter);
+
+        return {
+            data: results,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        };
     }
 }
 

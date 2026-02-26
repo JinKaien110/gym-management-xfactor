@@ -4,7 +4,7 @@ import { debuggerLog } from "../utils/debuggerLog.js";
 class ClassController {
     async createClass(req, res, next) {
         try {
-            const result = await ClassService.createClass(req.body, req.user);
+            const result = await ClassService.createClass(req.auditMeta, req.body, req.user);
 
             return res.status(201).json({ message: "Successfully create a class", result});
         } catch (error) {
@@ -37,7 +37,7 @@ class ClassController {
 
     async updateClass(req, res, next) {
         try {
-            const result = await ClassService.updateClass(req.params.id, req.body, req.user);
+            const result = await ClassService.updateClass(req.params.id, req.auditMeta, req.body, req.user);
 
             return res.status(201).json({ message: "Successfully update a class", result});
         } catch (error) {
@@ -48,7 +48,7 @@ class ClassController {
 
     async updateClassStatus(req, res, next) {
         try {
-            const result = await ClassService.updateClassStatus(req.params.id, req.body, req.user);
+            const result = await ClassService.updateClassStatus(req.params.id, req.auditMeta, req.body, req.user);
 
             return res.status(201).json({ message: "Successfully update a class status", result});
         } catch (error) {

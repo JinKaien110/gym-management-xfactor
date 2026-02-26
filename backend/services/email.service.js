@@ -1,12 +1,13 @@
 import axios from "axios"
 import dotenv from "dotenv"
+import { ValidationError } from "../errors/ValidationError.js";
 dotenv.config()
 
 export async function sendEmail({ to, subject, html }) {
     const apiKey = process.env.BREVO_API_KEY;
 
     if(!apiKey) {
-        throw new Error("BREVO_API_KEY is missing")
+        throw new ValidationError("BREVO_API_KEY is missing")
     }
 
     const payload = {
@@ -18,8 +19,8 @@ export async function sendEmail({ to, subject, html }) {
         subject,
         htmlContent: html
     };
-
-    const response = await axios.post(
+    try {
+        const response = await axios.post(
         "https://api.brevo.com/v3/smtp/email",
         payload,
         {
@@ -29,6 +30,10 @@ export async function sendEmail({ to, subject, html }) {
             }
         }
     );
+    } catch (error) {
+        return;
+    }
+    
 
     return response.data
 }

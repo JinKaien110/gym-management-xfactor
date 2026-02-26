@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { debuggerLog } from "../utils/debuggerLog.js";
+import { generateQrCode } from "../utils/generateQrCode.js";
 import MemberModel from "../models/MemberModel.js";
 import MemberService from "../services/member.service.js";
 
@@ -94,6 +95,17 @@ class MemberController {
         } catch (error) {
             debuggerLog("updateUserStatus Model: ", error);
             next(error)
+        }
+    }
+
+    async getMemberQrCode(req, res, next) {
+        try {
+            const memberId = req.params.id;
+            const qrCodeUrl = await generateQrCode(memberId);
+            return res.status(200).json({ qrCode: qrCodeUrl });
+        } catch (error) {
+            debuggerLog("getMemberQrCode Controller: ", error);
+            next(error);
         }
     }
 

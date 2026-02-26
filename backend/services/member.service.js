@@ -8,6 +8,10 @@ import MemberModel from "../models/MemberModel.js";
 import TrainerManagementModel from "../models/TrainerManagementModel.js";
 import MembershipModel from "../models/MembershipModel.js";
 import { connectDB } from "../config/db.js";
+import { trainerAssignedToMemberEmail } from "../templates/assignment/email.trainerAssignedToMember.js";
+import { sendEmail } from "./email.service.js";
+import checkDuplicate from "../utils/checkDuplicate.js";
+import { getChangedFields } from "../utils/getChangedFields.js";
 
 class MemberService {
     async PostForm(body, meta, updater) {
@@ -17,6 +21,9 @@ class MemberService {
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid member ID");
         }
+
+        const member = await MemberModel.findUserById(new ObjectId(id));
+        if(!member) throw new ValidationError("Member not found");
 
         if(!gender || !date_of_birth || !height || !weight || !bmi || !fitness_goal || !training_type || !experience_level || !days_per_week || !session_minutes) {
             throw new ValidationError("Please fill out the necesarry fields")
@@ -54,17 +61,28 @@ class MemberService {
                 ? fitness_goal.map(f => f.trim().toLowerCase())
                 : [fitness_goal.trim().toLowerCase()],
             medical_condition: medical_condition?.trim(),
+            training_type: training_type.trim().toLowerCase(),
+            experience_level: experience_level.trim().toLowerCase(),
+            days_per_week: Number(days_per_week),
+            session_minutes: Number(session_minutes),
             qr_code: qr,
             updatedAt: new Date(),
             updatedBy: new ObjectId(id)
         }
         
         return await AuditLogsService.auditWrap({
-            action: "MEMBER_ADDED_HEALTH_INFORMATION",
+            action: "MEMBERS_POSTFORM",
             entity: "members",
-            actor: { id: new ObjectId(updater.id), role: updater.role }, 
+            entity_id: new ObjectId(updater.id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
             meta: meta,
-            summary: `Member filled out postform for his health information`,
+            changes: {
+                patch: {
+                    before: member,
+                    after: sanitized
+                }
+            },
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) filled out postform for his health information`,
             fn: async () => {
                 return await MemberModel.PostForm(id, sanitized);
             }
@@ -104,8 +122,20 @@ class MemberService {
             throw new ValidationError("Invalid member");
         }
 
+        const email = {
+            member_first_name: updater.first_name,
+            member_last_name: updater.last_name,
+            trainer_first_name: trainer.first_name,
+            trainer_last_name: trainer.last_name,
+            trainer_email: trainer.email,
+            trainer_phone: trainer.phone,
+            assignedAt: new Date(),
+            assignedBy: updater.first_name
+        };
+
+
         return await AuditLogsService.auditWrap({
-            action: "MEMBER_SELECTED_A_TRAINER",
+            action: "MEMBERS_TRAINER_SELECT",
             entity: "members",
             entity_id: new ObjectId(updater.id) ?? null,
             actor: { id: new ObjectId(updater.id), role: updater.role }, 
@@ -124,13 +154,29 @@ class MemberService {
                         null,
                         session
                     );
-                    
+
                     await TrainerManagementModel.assignMember(
                         new ObjectId(updater.id),
                         new ObjectId(id),
                         null,
                         session
                     );
+
+                    await AuditLogsService.auditWrap({
+                        action: "EMAIL_TRAINER_NEW_MEMBER",
+                        entity: "members",
+                        entity_id: new ObjectId(updater.id),
+                        actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+                        meta: meta,
+                        summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) has been sent a notification email for new assigned member`,
+                        fn: async () => {
+                            return await sendEmail({
+                                to: updater.email,
+                                subject: "XFactor Fitness Gym Trece - Trainer Assignment",
+                                html: trainerAssignedToMemberEmail(email)
+                            });
+                        }
+                    })
                     await session.commitTransaction();
                     
                 } catch (error) {
@@ -154,15 +200,14 @@ class MemberService {
      */
 
     async createMember(body, meta, updater) {
-        const { first_name, last_name, email, phone, password } = body;
+        const { first_name, last_name, email, phone, gender, date_of_birth, password } = body;
         const id = updater.id;
 
-
-        if (!first_name || !last_name || !email || !phone || !password) {
+        if (!first_name || !last_name || !email || !phone || !password || !gender || !date_of_birth) {
             throw new ValidationError("Please fill out the necessary fields" );
         }
 
-        if (updater.role !== "admin") {
+        if (updater.role === "member" ||  updater.role === "" || updater.role === null || updater.role === undefined) {
             throw new ValidationError("Invalid authentication role");
         }
 
@@ -186,11 +231,12 @@ class MemberService {
             password: hashpassword,
 
             role: "member",
+            user_type: "member",
             status: "pending",
 
-            member_type: null,
-            gender: null,
-            date_of_birth: null,
+            member_type: "pending",
+            gender: gender.trim().toLowerCase(),
+            date_of_birth: date_of_birth ? new Date(date_of_birth) : null,
             height: null,
             weight: null,
             bmi: null,
@@ -217,33 +263,16 @@ class MemberService {
             archivedBy: null,
         };
 
-        const member = await AuditLogsService.auditWrap({
-            action: "CREATE_MEMBER",
+        await AuditLogsService.auditWrap({
+            action: "MEMBERS_ADMIN_CREATE",
             entity: "members",
-            actor: { id: new ObjectId(updater.id), role: updater.role }, 
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
             meta: meta,
-            summary: `Member created by ${updater.first_name} ${updater.last_name}`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) created  ${first_name.trim()} ${last_name.trim()}`,
             fn: async () => {
                 return await MemberModel.createMember(sanitized);
             },
         });
-
-        return await AuditLogsService.auditWrap({
-            action: "EMAIL_MEMBER_REGISTRATION",
-            entity: "members",
-            entity_id: member._id ?? null,
-            actor: { id: new ObjectId(updater.id), role: updater.role }, 
-            meta: meta,
-            summary: `Member was sent a welcome email `,
-
-            fn: async () => {
-                return await sendEmail({
-                    to: member.email,
-                    subject: "Welcome to XFactor Fitness Gym",
-                    html: memberRegisteredEmail(member)
-                });
-            }
-        })
 
     } 
 
@@ -333,13 +362,6 @@ class MemberService {
         if(emergency_relationship) sanitizedMember.emergency_relationship = emergency_relationship.trim().toLowerCase();
         if(!updatedBy || !ObjectId.isValid(updatedBy)) throw new ValidationError("Invalid admin ID");
 
-        // Membership Collection
-        if(plan_id && ObjectId.isValid(plan_id)) sanitizedMembership.plan_id = new ObjectId(plan_id);
-        if(pricing_id && ObjectId.isValid(pricing_id)) sanitizedMembership.pricing_id = new ObjectId(pricing_id);
-        if(start_date) sanitizedMembership.start_date = new Date(start_date);
-        if(expiry_date) sanitizedMembership.expiry_date = new Date(expiry_date);
-        if(membership_status) sanitizedMembership.status = membership_status.trim().toLowerCase();
-
         await checkDuplicate(new ObjectId(id), {
             email: sanitizedMember.email,
             phone: sanitizedMember.phone
@@ -348,29 +370,19 @@ class MemberService {
         const existingMember = await MemberModel.findUserById(new ObjectId(id));
         if (!existingMember) throw new ValidationError("No member found");
 
-        const existingMembership = await MemberModel.findUserByMembership(new ObjectId(id));
-        if (!existingMembership) throw new ValidationError("No membership found");
-
 
         const memberUpdates = getChangedFields(existingMember, sanitizedMember);
-        const membershipUpdates = getChangedFields(existingMembership, sanitizedMembership);
 
         return await AuditLogsService.auditWrap({
-            action: "UPDATE_MEMBER_PROFILE_AND/OR_MEMBERSHIP",
+            action: "MEMBERS_ADMIN_UPDATE",
             entity: "members",
             entity_id: new ObjectId(id) ?? null,
-            actor: { id: new ObjectId(updater.id), role: updater.role }, 
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
             meta: meta,
-            summary: `${updater.first_name} ${updater.last_name} (${updater.role}) updated ${first_name} ${last_name} profile and/or membership`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated ${first_name} ${last_name} profile and/or membership`,
             changes: { patch:  {
-                before: {
-                    members: existingMember,
-                    membership: existingMembership
-                },
-                after: {
-                    members: memberUpdates,
-                    membership: membershipUpdates
-                }
+                before: existingMember,
+                after: memberUpdates,
             } },
             fn: async () => {
                 const { client } = await connectDB();
@@ -385,13 +397,6 @@ class MemberService {
 
                         await MemberModel.updateMember(new ObjectId(id), memberUpdates, session);
 
-                    }
-
-                    if(Object.keys(membershipUpdates).length) {
-                        membershipUpdates.updatedAt = new Date();
-                        membershipUpdates.updatedBy = new ObjectId(updatedBy)
-
-                        await MemberModel.updateMembership(new ObjectId(id), membershipUpdates, session);
                     }
 
                     await session.commitTransaction();
@@ -415,6 +420,9 @@ class MemberService {
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid member ID");
         }
+        
+        const member = await MemberModel.findUserById(new ObjectId(id));
+        if(!member) throw new ValidationError("No member found");
 
         if(!adminId || !ObjectId.isValid(adminId)) {
             throw new ValidationError("Invalid member ID");
@@ -440,7 +448,6 @@ class MemberService {
         };
 
         const updateMembershipData = {
-            status: null,
             updatedAt: new Date(),
             updatedBy: adminId,
             archivedAt: null,
@@ -466,12 +473,18 @@ class MemberService {
         }
 
         return await AuditLogsService.auditWrap({
-            action: "UPDATE_MEMBER_STATUS",
+            action: "MEMBERS_STATUS_UPDATE",
             entity: "members",
             entity_id: new ObjectId(id) ?? null,
-            actor: { id: new ObjectId(updater.id), role: updater.role }, 
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
             meta: meta,
-            summary: `${updater.first_name} ${updater.last_name} (${updater.role}) updated ${first_name} ${last_name} profile status and/or membership status`,
+            changes: {
+                patch: {
+                    before: member.status,
+                    after: status
+                }
+            },
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated ${member.first_name} ${member.last_name} profile status and/or membership status to ${status}`,
             fn: async () => {
                 const { client } = await connectDB();
                 const session = client.startSession();
@@ -501,6 +514,8 @@ class MemberService {
         if(!id || !ObjectId.isValid(id)) {
             throw new ValidationError("Invalid member ID");
         }
+        const member = await MemberModel.findUserById(new ObjectId(id));
+        if(!member) throw new ValidationError("No member found");
 
         if(!trainer_id || !ObjectId.isValid(trainer_id)) {
             throw new ValidationError("Invalid trainer ID");
@@ -531,12 +546,12 @@ class MemberService {
 
         
         return await AuditLogsService.auditWrap({
-            action: "ASSIGN_A_TRAINER_TO_MEMBER",
-            entity: "member",
-            entity_id: new ObjectId(updater.id) ?? null,
-            actor: { id: new ObjectId(updater.id), role: updater.role }, 
+            action: "MEMBERS_ASSIGN_TRAINER",
+            entity: "members",
+            entity_id: new ObjectId(id) ?? null,
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
             meta: meta,
-            summary: `${updater.first_name} ${updater.last_name} (${updater.role}) assigned a trainer ${trainerExist.first_name} ${trainerExist.last_name} to ${first_name} ${last_name}`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) assigned a trainer ${trainerExist.first_name} ${trainerExist.last_name} to ${member.first_name} ${member.last_name}`,
             fn: async () => {
                 const { db, client } = await connectDB();
                 const session = client.startSession();

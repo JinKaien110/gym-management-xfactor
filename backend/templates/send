@@ -1,0 +1,21 @@
+/*
+
+
+
+return await AuditLogsService.auditWrap({
+            action: "EMAIL_MEMBER_REGISTRATION",
+            entity: "members",
+            entity_id: member._id ?? null,
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) has been sent a welcome email `,
+            fn: async () => {
+                return await sendEmail({
+                    to: member.email,
+                    subject: "XFactor Fitness Gym Trece - ",
+                    html: memberRegisteredEmail(member)
+                });
+            }
+        })
+
+*/

@@ -1,5 +1,6 @@
 import { connectDB } from "../config/db.js";
 import { ObjectId } from "mongodb";
+import { ValidationError } from "../errors/ValidationError.js";
 
 class MembershipModel {
     async createMembership(data) {
@@ -8,7 +9,7 @@ class MembershipModel {
         const result = await db.collection("memberships").insertOne(data);
 
         if(!result || !result.acknowledged) {
-            throw new Error("Error inserting membership");
+            throw new ValidationError("Error inserting membership");
         }
         
         return result;
@@ -34,10 +35,23 @@ class MembershipModel {
         );
 
         if(!result) {
-            throw new Error("Failed to view membership");
+            throw new ValidationError("Failed to view membership");
         }
 
         return result;
+    }
+
+    async findMembershipByMemberId(id) {
+        const { db } = await connectDB();
+
+        const result = await db.collection("memberships").find(
+            { member_id: id }
+        )
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+
+        return result[0];
     }
 
     async viewAllMembership(filter, search, page, limit) {
@@ -154,7 +168,7 @@ class MembershipModel {
         );
 
         if(!result) {
-            throw new Error("Failed to update membership");
+            throw new ValidationError("Failed to update membership");
         }
 
         return result;
@@ -173,11 +187,11 @@ class MembershipModel {
         );
 
         if(!result) {
-            throw new Error("Failed to update membership status");
+            throw new ValidationError("Failed to update membership status");
         }
 
         if(!result._id) {
-            throw new Error("Membership not found");
+            throw new ValidationError("Membership not found");
         }
 
         return result;
@@ -193,7 +207,7 @@ class MembershipModel {
         );
 
         if(!result) {
-            throw new Error("Failed to freeze the membership");
+            throw new ValidationError("Failed to freeze the membership");
         }
 
         return result;
@@ -209,7 +223,7 @@ class MembershipModel {
         );
 
         if(!result) {
-            throw new Error("Failed to unfreeze the membership");
+            throw new ValidationError("Failed to unfreeze the membership");
         }
 
         return result;

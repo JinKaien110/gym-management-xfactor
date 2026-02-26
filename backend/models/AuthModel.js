@@ -6,7 +6,8 @@ class AuthModel {
 
     async FindUserById(UserId) {
         const { db } = await connectDB();
-        const ID = await db.collection('members').findOne({ _id: new ObjectId(UserId) });
+        const ID = await db.collection('members').findOne({ _id: new ObjectId(UserId) },
+    { projection: { password: 0 } });
 
         return ID;
     }
@@ -18,8 +19,8 @@ class AuthModel {
         return user;
     }
 
-    async ValidatePassword(InputPassword, UserEmail) {
-        return await bcrypt.compare(InputPassword, UserEmail);
+    async ValidatePassword(input, passwordhash) {
+        return await bcrypt.compare(input, passwordhash);
     }
 
 }

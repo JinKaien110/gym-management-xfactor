@@ -41,7 +41,7 @@ class AuthController {
             return res.status(201).json({
                 message: "User registered successfully!",
                 user: result
-            });
+            }); 
 
         } catch (error) {
             debuggerLog("registerUser Controller", error);
@@ -66,13 +66,20 @@ class AuthController {
 
     async Me(req, res, next) {
         try {
-            const user = await MemberModel.findUserById(req.user.id);
-
-            if(!user) throw new ValidationError("User not found");
-
-            return res.status(200).json(user);
+            const result = await AuthService.Me(req.user);
+            return res.status(200).json(result);
         } catch (error) {
             debuggerLog("me Controller", error);
+            next(error);
+        }
+    }
+
+    async SingleSourceOfTruth(req, res, next) {
+        try {
+            const result = await AuthService.SingleSourceOfTruth(req.user);
+            return res.status(200).json(result);
+        } catch (error) {
+            debuggerLog("singleSourceOfTruth Controller", error);
             next(error);
         }
     }

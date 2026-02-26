@@ -3,6 +3,7 @@ import AuditLogsService from "./audit.logs.service.js";
 import PricingModel from "../models/PricingModel.js";
 import { debuggerLog } from "../utils/debuggerLog.js";
 import { ObjectId } from "mongodb";
+import PlanModel from "../models/PlanModel.js";
 
 class PricingService {
     async createPricing(meta, body, updater) {
@@ -24,6 +25,8 @@ class PricingService {
         if(!allowedTypes.includes(type)) throw new ValidationError("Pricing type value is not valid");
 
         const planId = new ObjectId(plan_id);
+        const plan = await PlanModel.viewAPlan(planId);
+        if(!plan) throw new ValidationError("Plan does not exist");
         adminId = new ObjectId(adminId);
 
         const sanitized = {
@@ -44,11 +47,11 @@ class PricingService {
         }
 
         return await AuditLogsService.auditWrap({
-            action: "CREATE_PRICING",
+            action: "PRICING_CREATED",
             entity: "pricing",
             actor: { id: adminId, role: updater.role  }, 
             meta: meta,
-            summary: `${updater.first_name} created a plan`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) created a pricing ${label} duration of ${duration_days} days with a price of ${price} membership fee of ${membership_fee} for ${type} member type for plan ${plan.label}`,
             fn: async () => {
                 return await PricingModel.createPricing(sanitized);
             }
@@ -151,9 +154,10 @@ class PricingService {
         }
 
         return await AuditLogsService.auditWrap({
-            action: "UPDATE_PRICING",
+            action: "PRICING_UPDATED",
             entity: "pricing",
-            actor: { id: adminId, role: updater.role  }, 
+            entity_id: new ObjectId(id),
+            actor: { id: adminId, role: updater.role, user_type: updater.user_type  }, 
             meta: meta,
             changes: {
                 patch: {
@@ -175,7 +179,7 @@ class PricingService {
                     }
                 }
             },
-            summary: `${updater.first_name} updated ${Exist.label}`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated the pricing ${Exist.label} to duration of ${duration_days} days with a price of ${price} membership fee of ${membership_fee} for ${type} member type`,
             fn: async () => {
                 return await PricingModel.updatePricing(priceData);
             }
@@ -226,11 +230,11 @@ class PricingService {
         }
 
         return await AuditLogsService.auditWrap({
-            action: "UPDATE_PRICING_STATUS",
+            action: "PRICING_UPDATE",
             entity: "pricing",
-            actor: { id: adminId, role: updater.role  }, 
+            actor: { id: adminId, role: updater.role, user_type: updater.user_type  }, 
             meta: meta,
-            summary: `${updater.first_name} updated ${Exist.label} status to ${status}`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated ${Exist.label} status to ${status}`,
             changes: {
                 patch: {
                     before: {

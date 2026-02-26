@@ -39,7 +39,7 @@ class AIRecommendationService {
             summary: `Trainer requested AI recommendation for member ${String(memberId)}`,
 
             fn: async () => {
-            const member = await MemberModel.FindUserById(memberId);
+            const member = await MemberModel.findUserById(memberId);
             if (!member) throw new ValidationError("No member found");
 
             if (!member.trainer_id || String(member.trainer_id) !== String(trainerId)) {
@@ -165,13 +165,14 @@ class AIRecommendationService {
         };
 
         return await AuditLogsService.auditWrap({
-            action: "DECISION_RECOMMENDATION",
+            action: "AI_RECOMMENDATION_DECISION",
             entity: "workout_recommendations",
+            entity_id: new ObjectId(id),
             actor: { id: trainerId, role: 
                 updater.role
               }, 
             meta: meta,
-            summary: `${updater.first_name} decided to ${status} the recommendation`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) decided to ${status} the recommendation`,
             changes: {
                 before: {
                     status: existing.status
@@ -221,7 +222,7 @@ class AIRecommendationService {
 
         const memberId = new ObjectId(recommendationParent.member_id);
 
-        const member = await MemberModel.FindUserById(memberId)
+        const member = await MemberModel.findUserById(memberId)
         if(!member) {
             throw new ValidationError("No member found")
         }
@@ -338,13 +339,13 @@ class AIRecommendationService {
 
         
         return await AuditLogsService.auditWrap({
-            action: "REGENERATE_RECOMMENDATION",
+            action: "AI_RECOMMENDATION_REGENERATE",
             entity: "workout_recommendations",
             actor: { id: trainerId, role: 
-                updater.role
+                updater.role, user_type: updater.user_type
               }, 
             meta: meta,
-            summary: `${updater.first_name} request for a new recommendation`,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) request for a new recommendation`,
             fn: async () => {
                 return await AIRecommendationModel.requestRecommendation(newDoc)
             }

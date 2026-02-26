@@ -7,7 +7,10 @@ class AdminModel {
     async viewAdmin(id) {
         const { db } = await connectDB();
 
-        const result = await db.collection('member').findOne({ _id: id });
+        const result = await db.collection('admins').findOne(
+            { _id: id },
+            { projection: { password: 0 } }
+        );
 
         return result;
     }
@@ -15,7 +18,7 @@ class AdminModel {
     async viewAdminByEmail(email) {
         const { db } = await connectDB();
 
-        const result = await db.collection('member').findOne({ email });
+        const result = await db.collection('admins').findOne({ email });
 
         return result;
     }
@@ -23,20 +26,23 @@ class AdminModel {
     async createAdmin(data) {
         const { db } = await connectDB();
 
-        const result = await db.collection('member').insertOne(data);
+        const result = await db.collection('admins').insertOne(data,
+            { projection: { password: 0 } }
+        );
 
         if(!result.acknowledged) throw new ValidationError("Failed to create new admin");
 
+        const { password, ...user } = data
         return {
-            result: result.insertedId,
-            ...data
-        };
+            _id: result.insertedId,
+            ...user
+        }
     }
 
     async updatePassword(id, data) {
         const { db } = await connectDB();
 
-        const result = await db.collection('member').findOneAndUpdate(
+        const result = await db.collection('admins').findOneAndUpdate(
             { _id: id },
             { $set: data },
             { returnDocument: "after" }

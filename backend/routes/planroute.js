@@ -1,10 +1,13 @@
 import express from "express";
 import PlanController from "../controllers/PlanController.js";
-import { authorizeRoles, verifyToken } from "../middleware/authmiddleware.js";
+import { authorizeRoles, verifyToken, authorizeUserTypes } from "../middleware/authmiddleware.js";
 const router = express.Router();
 
+// Public endpoint - no auth required
+router.get("/public/plans", PlanController.viewAllPlans);
+
 router.post("/plans", verifyToken, authorizeRoles("admin", "staff"), PlanController.createPlans);
-router.get("/plans", verifyToken, authorizeRoles("admin", "staff"), PlanController.viewAllPlans);
+router.get("/plans", verifyToken, authorizeUserTypes("admin"), authorizeRoles("admin", "staff", "superadmin"), PlanController.viewAllPlans);
 router.get("/plans/:id", verifyToken, authorizeRoles("admin", "staff"), PlanController.viewAPlan);
 router.patch("/plans/:id", verifyToken, authorizeRoles("admin", "staff"), PlanController.updatePlan);
 router.patch("/plans/:id/status", verifyToken, authorizeRoles("admin", "staff"), PlanController.updatePlanStatus);

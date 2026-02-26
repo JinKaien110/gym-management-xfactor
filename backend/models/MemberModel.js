@@ -12,9 +12,17 @@ class MemberModel {
         const { db } = await connectDB();
         const result = await db.collection("members").insertOne(data);
 
+        const qr_code = generateQrCode(result.insertedId.toString());
+
+        await db.collection("members").updateOne(
+            { _id: result.insertedId },
+            { $set: { qr_code } }
+        );
+
         return {
             id: result.insertedId,
-            ...data
+            ...data,
+            qr_code
         };
     }
 
@@ -22,8 +30,7 @@ class MemberModel {
         const { db } = await connectDB();
 
         const result = await db.collection("members").findOne(
-            { email: email },
-            { projection: { password: 0 } }
+            { email: email }
         )
 
         return result;
@@ -35,7 +42,9 @@ class MemberModel {
         const result = await db.collection("members").findOneAndUpdate(
             { _id: new ObjectId(id) },
             { $set:  data },
-            { returnDocument: "after" }
+            { returnDocument: "after",
+                 projection: { password: 0 }
+             }
             )
 
             if(!result) {
@@ -57,7 +66,9 @@ class MemberModel {
                     { $size: { $ifNull: ['$assigned_members', []] } },
                     "$max_members"
                 ]
-            } })
+            },
+            projection: { password: 0 }
+         })
         .toArray();
 
         return result;
@@ -98,9 +109,17 @@ class MemberModel {
             throw new ValidationError("Failed to create the user");
         }
 
+        const qr_code = generateQrCode(result.insertedId.toString());
+
+        await db.collection("members").updateOne(
+            { _id: result.insertedId },
+            { $set: { qr_code } }
+        );
+
         return {
             _id: result.insertedId,
-            ...data
+            ...data,
+            qr_code
         };
     }
 
