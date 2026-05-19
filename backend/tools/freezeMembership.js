@@ -1,8 +1,8 @@
-async function freezeMembership(membershipId, freeze_start, freeze_end, updater) {
+async function freezemembership(membershipId, freeze_start, freeze_end, updater) {
     const db = await connectDB();
     const membership = await db.collection("memberships").findOne({ _id: membershipId });
 
-    if (!membership) throw new Error("Membership not found");
+    if (!membership) throw new Error("membership not found");
 
     const freezeDuration = freeze_end.getTime() - freeze_start.getTime();
 

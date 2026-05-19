@@ -1,25 +1,44 @@
 import { connectDB } from "../config/db.js";
 import { ObjectId } from "mongodb";
 import { debuggerLog } from "../utils/debuggerLog.js";
+import { ValidationError } from "../errors/ValidationError.js";
 
 class TrainerManagementModel {
     async createTrainer(data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const trainer = await db.collection("trainers").insertOne(data);
 
         if(!trainer || !trainer.acknowledged) {
-            throw new Error("Failed to create new trainer");
+            throw new ValidationError("Failed to create new trainer");
         }
-
+        
         return { 
             _id: trainer.insertedId,
             ...data
         };
     }
 
+    async findTrainerByEmail(email) {
+        const { db } = await connectDB();
+
+        const trainer = await db.collection("trainers").findOne({email})
+
+        return trainer;
+    }
+
+    async findTrainerById(id) {
+        const { db } = await connectDB();
+
+        const trainer = await db.collection("trainers").findOne({ _id: id },
+            { projection: { password: 0 } }
+        )
+
+        return trainer;
+    }
+
     async listTrainers(filter, page, limit) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const pipeline = [
             { $match: filter },
@@ -38,7 +57,7 @@ class TrainerManagementModel {
                 }
             },
             { $sort: { statusPriority: 1, createdAt: -1 } },
-
+            { $project: { password: 0, statusPriority: 0 } },
             {
                 $facet: {
                     data: [
@@ -77,20 +96,18 @@ class TrainerManagementModel {
     }
 
     async getTrainer(id) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         
         const result = await db.collection("trainers").findOne(
             { _id: id },
             { projection: { password: 0 } }
         );
 
-        if(!result) throw new Error("No trainer found");
-
         return result
     }
 
     async updateTrainerProfile(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
         
 
         const result = await db.collection("trainers").findOneAndUpdate(
@@ -100,14 +117,14 @@ class TrainerManagementModel {
         );
 
         if(!result) {
-            throw new Error("Failed to update trainer profile")
+            throw new ValidationError("Failed to update trainer profile")
         }
 
         return data;
     }
     
     async updateTrainerStatus(id, data) {
-        const db = await connectDB();
+        const { db } = await connectDB();
 
         const result = await db.collection("trainers").findOneAndUpdate(
             { _id: id },
@@ -116,16 +133,16 @@ class TrainerManagementModel {
         )
 
         if(!result) {
-            throw new Error("Failed to update trainer");
+            throw new ValidationError("Failed to update trainer");
         };
 
         return data;
     }
 
-    async removeTrainerFromMembers(id) {
-        const db = await connectDB();
+    async removeTrainerFromclients(id) {
+        const { db } = await connectDB();
 
-        const result = await db.collection("members").updateMany(
+        const result = await db.collection("clients").updateMany(
             { trainer_id: id },
             { $set: { trainer_id: null } }
         );
@@ -133,57 +150,41 @@ class TrainerManagementModel {
         return result.modifiedCount;
     }
 
-    async assignMember(id, member, data) {
-        const db = await connectDB();
-        let result;
-        const memberUpdate = await db.collection("members").findOneAndUpdate(
-                    { _id: member },
-                    { $set: 
-                        { trainer_id: id, 
-                            ...data
-                        } 
-                    },
-                    { returnDocument: "after",
-                        projection: { password: 0 }
-                    }
-                );
+    async assignclient(id, trainer_id, adminId, session = null) {
+        const { db } = await connectDB();
 
-                if(!memberUpdate) {
-                    throw new Error("Failed to assign member");
+        const result = await db.collection("trainers").findOneAndUpdate(
+            { _id: trainer_id },
+            { 
+                $addToSet: {
+                    assigned_clients: id
+                },
+                $set: {
+                    updatedAt: new Date(),
+                    updatedBy: adminId ?? id
                 }
-
-                const trainerUpdate = await db.collection("trainers").findOneAndUpdate(
-                    { _id: id },
-                    { 
-                        $addToSet: {
-                            assigned_members: member
-                        },
-                        $set: data
-                    },
-                    { returnDocument: "after",
-                        projection: { password: 0 }
-                     }
-                );
-
-                if(!trainerUpdate) {
-                    throw new Error("Failed to assign member");
-                }
+            },
+            {   returnDocument: "after",
+                projection: { password: 0 },
+                ...(session ? { session } : {}),
+            }
                 
-                result = {
-                    member: memberUpdate,
-                    trainer: trainerUpdate
-                }
+        );
 
+        if(!result) {
+            throw new ValidationError("Failed to assign client");
+        }
+        
         return result;
     }
     
-    async removeMember(id, member, data) {
-        const db = await connectDB();
+    async removeclient(id, client, data) {
+        const { db } = await connectDB();
 
         const trainerUpdate = await db.collection("trainers").findOneAndUpdate(
             { _id: id },
             { 
-                $pull: { assigned_members: member },
+                $pull: { assigned_clients: client },
                 $set: data 
             },
             { returnDocument: "after",
@@ -191,8 +192,8 @@ class TrainerManagementModel {
             }
         );
 
-        const memberUpdate = await db.collection("members").findOneAndUpdate(
-            { _id: member },
+        const clientUpdate = await db.collection("clients").findOneAndUpdate(
+            { _id: client },
             { $set: { trainer_id: null, ...data } },
             { returnDocument: "after",
                 projection: { password: 0 }
@@ -200,15 +201,15 @@ class TrainerManagementModel {
         )
 
         if(!trainerUpdate) {
-            throw new Error("Failed to remove member");
+            throw new ValidationError("Failed to remove client");
         }
 
-        if(!memberUpdate) {
-            throw new Error("Failed to remove trainer");
+        if(!clientUpdate) {
+            throw new ValidationError("Failed to remove trainer");
         }
 
         return {
-            member: memberUpdate,
+            client: clientUpdate,
             trainer: trainerUpdate
         };
     }

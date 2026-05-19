@@ -16,12 +16,12 @@ async function paymentWebhook(req, res) {
             });
 
             // Update membership
-            await MembershipModel.updateMembership(cancelReq.membership_id, {
+            await MembershipModel.updatemembership(cancelReq.membership_id, {
                 status: "cancelled",
                 updatedAt: new Date()
             });
 
-            return res.json({ message: "Membership cancelled successfully" });
+            return res.json({ message: "membership cancelled successfully" });
         } else {
             await CancellationRequestModel.update(cancel_request_id, {
                 status: "failed",

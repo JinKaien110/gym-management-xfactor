@@ -1,19 +1,19 @@
 // POST /api/memberships/:id/cancel
-async function cancelMembership(req, res) {
+async function cancelmembership(req, res) {
     try {
         const { id } = req.params;
         const userId = req.user.id;
 
         // 1. Check membership
-        const membership = await MembershipModel.getMembership(id);
-        if(!membership || membership.member_id.toString() !== userId) {
-            return res.status(404).json({ message: "Membership not found" });
+        const membership = await MembershipModel.getmembership(id);
+        if(!membership || membership.client_id.toString() !== userId) {
+            return res.status(404).json({ message: "membership not found" });
         }
 
         // 2. Create cancellation request in DB
         const cancelReq = {
             membership_id: new ObjectId(id),
-            member_id: new ObjectId(userId),
+            client_id: new ObjectId(userId),
             status: "pending",
             amount: 5000, // cancellation fee
             requested_at: new Date(),

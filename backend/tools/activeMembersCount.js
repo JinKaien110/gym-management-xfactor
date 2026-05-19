@@ -1,11 +1,11 @@
-// Pseudocode for checking if a trainer can take a new member
-const activeMembersCount = await db.collection("members").countDocuments({
+// Pseudocode for checking if a trainer can take a new client
+const activeclientsCount = await db.collection("clients").countDocuments({
     trainer_id: trainer._id,
     status: "active"
 });
 
-if (activeMembersCount >= trainer.max_members) {
-    throw new Error("Trainer has reached maximum active members");
+if (activeclientsCount >= trainer.max_clients) {
+    throw new Error("Trainer has reached maximum active clients");
 }
 
 
@@ -35,12 +35,12 @@ if (activeMembersCount >= trainer.max_members) {
             throw new Error("End date must be after start date");
         }
 
-        const active = await MembershipModel.alreadyHaveMembership(new ObjectId(member_id));
+        const active = await MembershipModel.alreadyHavemembership(new ObjectId(client_id));
 
         if(active) throw new Error("User already have an active membership")
             
         const sanitized = {
-            member_id: new ObjectId(member_id),
+            client_id: new ObjectId(client_id),
             plan_id: new ObjectId(plan_id),
             pricing_id: new ObjectId(pricing_id),
             start_date: start_date,

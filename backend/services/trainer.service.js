@@ -1,29 +1,48 @@
-import { ObjectId } from "mongodb";
+import { ChangeStream, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import TrainerManagementModel from "../models/TrainerManagementModel.js";
 import { hashedPassword } from "../utils/hashedPassword.js";
 import checkDuplicate from "../utils/checkDuplicate.js";
 import { getChangedFields } from "../utils/getChangedFields.js";
-import MemberModel from "../models/MemberModel.js";
+import ClientModel from "../models/ClientModel.js";
+import { ValidationError } from "../errors/ValidationError.js";
+import { connectDB } from "../config/db.js";
+import { clientAssignedToTrainerEmail } from "../templates/assignment/email.clientAssignedToTrainer.js";
+import { sendEmail } from "./email.service.js";
+import { generateRandomPassword } from "../utils/generateRandomPassword.js";
+import AuditLogsService from "./audit.logs.service.js";
+import { welcomeTrainer } from "../templates/trainers/email.welcome.js";
+
 
 
 class TrainerService {
-    async createTrainer(body, user) {
-        let { first_name, last_name, email, phone, password, specialization, certification, availability, assigned_members, max_members } = body;
-        let creator = user.id;
+    async createTrainer(meta, body, updater) {
+  
+        let { first_name, last_name, email, phone, specialization, certification, availability, rate, max_hours } = body;
+        let creator = updater.id;
 
-        if(!first_name || !last_name || !email || !phone || !password || !specialization || !availability || !max_members  ) {
-            throw new Error("Please fill out the necessary fields");
+        if(!first_name || !last_name || !email || !rate || !max_hours || !phone  || !specialization || !availability   ) {
+            throw new ValidationError("Please fill out the necessary fields");
         }
 
-        if(isNaN(max_members)) {
-            throw new Error("Max members should be numerical");
+        if(isNaN(rate) || isNaN(max_hours) ) {
+            throw new ValidationError("Max clients should be numerical");
+        }
+
+        if(isNaN(rate)) {
+            throw new ValidationError("Rate should be numerical");
+        }
+
+        if(isNaN(max_hours)) {
+            throw new ValidationError("Max hours should be numerical");
         }
 
         if(!creator || !ObjectId.isValid(creator)) {
-            throw new Error("Invalid admin ID");
+            throw new ValidationError("Invalid admin ID");
         }
 
+        const password =  generateRandomPassword();
+        console.log(password)
         const hashpw = await hashedPassword(password);
 
         const sanitized = {
@@ -33,6 +52,7 @@ class TrainerService {
             phone: phone.trim(),
             password: hashpw,
             role: "trainer",
+            user_type: "trainer",
             status: "active",
             specialization: Array.isArray(specialization)
                 ? specialization.map(s => s.trim().toLowerCase())
@@ -45,8 +65,8 @@ class TrainerService {
                 time_from: String(availability.time_from).trim(),
                 time_to: String(availability.time_to).trim()
             },
-            assigned_members: [],
-            max_members: Number(max_members),
+            rate: Number(rate),
+            max_hours: Number(max_hours),
             createdAt: new Date(),
             createdBy: new ObjectId(creator),
             updatedAt: new Date(),
@@ -54,17 +74,51 @@ class TrainerService {
             archivedAt: null,
             archivedBy: null
         }
+    
 
-        return await TrainerManagementModel.createTrainer(sanitized);
+        return await AuditLogsService.auditWrap({
+            action: "TRAINER_CREATED",
+            entity: "trainers",
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) created trainer ${first_name} ${last_name}`,
+            fn: async () => {
+                const client = await TrainerManagementModel.createTrainer(sanitized);
+                
+                await AuditLogsService.auditWrap({
+                    action: "EMAIL_TRAINER_CREATED",
+                    entity: "trainers",
+                    actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+                    meta: meta,
+                    summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) has been sent an email notification about trainer credentials `,
+
+                    fn: async () => {
+              
+                        await sendEmail({
+                            to: sanitized.email,
+                            subject: "6Pack Iron City - Welcome to 6Pack Iron City Trece",
+                            html: welcomeTrainer(sanitized, password)
+                        });
+                    }
+                })
+                return client
+            }
+        });
+       
     }
 
-    async listTrainers(query) {
+    async listPublicTrainers() {
+    const filter = { status: "active" };
+    return await TrainerManagementModel.listTrainers(filter, 1, 1000);
+  }
+
+  async listTrainers(query) {
         let { status, specialization, search, page = 1, limit = 10} = query;
 
         const allowedStatus = ["active", "inactive", "archived"];
 
         if(status && !allowedStatus.includes(status)) {
-            throw new Error("Invalid status");
+            throw new ValidationError("Invalid status");
         }
 
         page = Number(page);
@@ -94,19 +148,20 @@ class TrainerService {
 
     async getTrainer(id) {
         if(!id || !ObjectId.isValid(id)) {
-            throw new Error("Invalid trainer ID");
+            throw new ValidationError("Invalid trainer ID");
         }
 
         return await TrainerManagementModel.getTrainer(new ObjectId(id));
     }
 
-    async updateTrainerProfile(id, body, updater) {
+    async updateTrainerProfile(id, meta, body, updater) {
+
         if(!id || !ObjectId.isValid(id)) {
-            throw new Error("Invalid trainer ID");
+            throw new ValidationError("Invalid trainer ID");
         }
 
         if(!updater.id || !ObjectId.isValid(updater.id)) {
-            throw new Error("Invalid updater ID");
+            throw new ValidationError("Invalid updater ID");
         }
 
         await checkDuplicate(id, {
@@ -119,6 +174,8 @@ class TrainerService {
         if(updater.role === "staff") {
             allowedFields = [
                 "availability",
+                "rate",
+                "max_hours"
             ];
         }
 
@@ -130,12 +187,13 @@ class TrainerService {
                 "phone",
                 "availability",
                 "specialization",
-                "max_members"
+                "rate",
+                "max_hours"
             ];
         }
 
         if(!allowedFields.length) {
-            throw new Error("Unauthorized role");
+            throw new ValidationError("Unauthorized role");
         }
 
          const existingTrainer = await TrainerManagementModel.getTrainer(new ObjectId(id));
@@ -149,11 +207,13 @@ class TrainerService {
             phone: "string",
             specialization: "array",
             availability: "object",
-            max_members: "number",
+            max_clients: "number",
+            rate: "number",
+            max_hours: "number"
         }
 
         for (const key of allowedFields) {
-            const value = body[key];
+            let value = body[key];
             if(value !== undefined) {
                 updateData[key] = body[key];
 
@@ -162,17 +222,33 @@ class TrainerService {
                 } else if (fieldTypes[key] === "number") {
                     const num = Number(value);
                     if(Number.isNaN(num)) {
-                        throw new Error(`${key} must be a number`)
+                        throw new ValidationError(`${key} must be a number`)
                     }
                     updateData[key] = num;
                 } else if (fieldTypes[key] === "array") {
+                        if (typeof value === "string") {
+                        try {
+                            value = JSON.parse(value); // handles '["a","b"]'
+                        } catch {
+                            // fallback for comma-separated strings
+                            value = value.split(",");
+                        }
+                    }
                     if(!Array.isArray(value)) {
-                        throw new Error(`${key} must be an array`);
+                        throw new ValidationError(`${key} must be an array`);
                     }
                     updateData[key] = value.map(v => typeof v === "string" ? v.trim().toLowerCase() : v);
                 } else if (fieldTypes[key] === "object") {
+                     if (typeof value === "string") {
+                        try {
+                            value = JSON.parse(value);
+                        } catch {
+                            throw new ValidationError(`${key} must be a valid object`);
+                        }
+                    }
                     if(typeof value !== "object") {
-                        throw new Error(`${key} must be an object`);
+                        fieldTypes[key] = JSON.parse(fieldTypes[key]);
+                        throw new ValidationError(`${key} must be an object`);
                     }
                     if(key === "availability") {
                         const existingAvailability = existingTrainer.availability || {};
@@ -197,7 +273,7 @@ class TrainerService {
         }
 
         if(!Object.keys(updateData).length) {
-            throw new Error("No valid fields to update");
+            throw new ValidationError("No valid fields to update");
         } 
 
        
@@ -205,33 +281,53 @@ class TrainerService {
         const trainerUpdates = getChangedFields(existingTrainer, updateData);
 
         if(Object.keys(trainerUpdates).length) {
-            updateData.updatedAt = new Date();
-            updateData.updatedBy = new ObjectId(updater.id);
+            trainerUpdates.updatedAt = new Date();
+            trainerUpdates.updatedBy = new ObjectId(updater.id);
         }
 
-        return await TrainerManagementModel.updateTrainerProfile(
-            new ObjectId(id),
-            updateData
-        )
+        return await AuditLogsService.auditWrap({
+            action: "TRAINER_UPDATED",
+            entity: "trainers",
+            entity_id: new ObjectId(id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated trainer profile`,
+            changes: {
+                patch: {
+                    before: existingTrainer,
+                    after:  trainerUpdates
+                }
+            },
+            fn: async () => {
+                return await TrainerManagementModel.updateTrainerProfile(
+                    new ObjectId(id),
+                    trainerUpdates
+                );
+            }
+        });
+        
     }
 
-    async updateTrainerStatus(id, status, updater) {
+    async updateTrainerStatus(id, meta, status, updater) {
         if(!id || !ObjectId.isValid(id)) {
-            throw new Error("Invalid trainer ID");
+            throw new ValidationError("Invalid trainer ID");
         }
+        
+        const trainer = await TrainerManagementModel.findTrainerById(new ObjectId(id));
+        if(!trainer) throw new ValidationError("No trainer found");
 
         if(!updater || !ObjectId.isValid(updater)) {
-            throw new Error("Invalid trainer ID");
+            throw new ValidationError("Invalid trainer ID");
         }
 
         if(!status) {
-            throw new Error("Missing status value");
+            throw new ValidationError("Missing status value");
         }
 
         const allowedStatus = ["active", "inactive", "archived"];
 
         if(!allowedStatus.includes(status)) {
-            throw new Error("Invalid status value");
+            throw new ValidationError("Invalid status value");
         }
 
         let sanitized = {
@@ -244,90 +340,299 @@ class TrainerService {
             sanitized.archivedAt = new Date();
             sanitized.archivedBy = new ObjectId(updater)
 
-            await TrainerManagementModel.removeTrainerFromMembers(new ObjectId(id));
+            await AuditLogsService.auditWrap({
+                action: "TRAINER_UPDATED",
+                entity: "trainers",
+                entity_id: new ObjectId(id),
+                actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+                meta: meta,
+                summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) removed the trainers assigned to clients`,
+                changes: {
+                    patch: {
+                        before: trainer.assigned_clients,
+                        after: "0"
+                    }
+                },
+                fn: async () => {
+                    await TrainerManagementModel.removeTrainerFromclients(new ObjectId(id));
+                }
+            });
+            
         }
         
-        return await TrainerManagementModel.updateTrainerStatus(new ObjectId(id), sanitized);
+        return await AuditLogsService.auditWrap({
+            action: "TRAINER_UPDATED",
+            entity: "trainers",
+            entity_id: new ObjectId(id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) updated the trainer ${trainer.first_name} ${trainer.last_name} status to ${status}`,
+                changes: {
+                    patch: {
+                        before: trainer.status,
+                        after: status
+                    }
+                },
+            fn: async () => {
+                return await TrainerManagementModel.updateTrainerStatus(new ObjectId(id), sanitized);
+            }
+        });
+        
     }
 
-    async assignMember(id, body, updater) {
+    async assignclient(id, meta, body, updater) {
 
-        if(!body.member) {
-            throw new Error("Please select a member to add");
+        if(!body.client_id) {
+            throw new ValidationError("Please select a client to add");
         }
 
         if(!id || !ObjectId.isValid(id)) {
-            throw new Error("Invalid trainer ID");
+            throw new ValidationError("Invalid trainer ID");
         }
 
-        if(!updater || !ObjectId.isValid(updater)) {
-            throw new Error("Invalid updater ID");
+        if(!updater.id || !ObjectId.isValid(updater.id)) {
+            throw new ValidationError("Invalid updater ID");
         }
 
-        if(!ObjectId.isValid(body.member)) {
-            throw new Error("Invalid member ID");
+        if(!ObjectId.isValid(body.client_id)) {
+            throw new ValidationError("Invalid client ID");
         }
 
         const trainer = await TrainerManagementModel.getTrainer(new ObjectId(id));
 
         if(!trainer) {
-            throw new Error("Trainer not found");
+            throw new ValidationError("Trainer not found");
         }
 
-        const member = await MemberModel.FindUserById(body.member);
+        const client = await ClientModel.findUserById(new ObjectId(body.client_id));
 
-        if(!member) {
-            throw new Error("Member not found");
+        if(!client) {
+            throw new ValidationError("client not found");
         }
 
-        if(member.trainer_id) {
-            throw new Error("Member has already have a trainer");
+        if(client.trainer_id) {
+            throw new ValidationError("client has already have a trainer");
         }
 
-        if(trainer.assigned_members.some(m => m.equals(new ObjectId(body.member)))) {
-            throw new Error("Member is already assigned to the trainer");
+        if(trainer.assigned_clients.some(m => m.equals(new ObjectId(body.client_id)))) {
+            throw new ValidationError("client is already assigned to the trainer");
         }
 
-        const sanitize = {
-            updatedAt: new Date(),
-            updatedBy: new ObjectId(updater)
-        }
+        const email = {
+            trainer_first_name: trainer.first_name,
+            trainer_last_name: trainer.last_name,
+            client_first_name: client.first_name,
+            client_last_name: client.last_name,
+            client_email: client.email,
+            assignedAt: new Date(),
+            assignedBy: new ObjectId(updater.id)
+        };
 
-        return await TrainerManagementModel.assignMember(
-            new ObjectId(id),
-            new ObjectId(body.member),
-            sanitize
-        )
+        
+        await AuditLogsService.auditWrap({
+            action: "TRAINERS_UPDATED",
+            entity: "trainers",
+            entity_id: new ObjectId(id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) assigned client to ${client.first_name} ${client.last_name}`,
+            fn: async () => {
+                return await TrainerManagementModel.assignclient(
+                    new ObjectId(body.client_id), 
+                    new ObjectId(id), // trainer_id
+                    new ObjectId(updater.id)
+                );
+            }
+        });
+        await AuditLogsService.auditWrap({
+            action: "EMAIL_TRAINER_NEW_client",
+            entity: "clients",
+            entity_id: new ObjectId(updater.id),
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) has been sent a notification email for new assigned client`,
+            fn: async () => {
+                return await sendEmail({
+                    to: updater.email,
+                    subject: "6Pack Iron City - Trainer Assignment",
+                    html: clientAssignedToTrainerEmail(email)
+                });
+            }
+        });
+        return;
     }
 
-    async removeMember(id, body, updater) {
-        if(!body.member) {
-            throw new Error("Please select a member to remove");
-        }
+     async removeclient(id, meta, body, updater) {
 
-        if(!id || !ObjectId.isValid(id)) {
-            throw new Error("Invalid trainer ID");
-        }
+         if(!body.client_id) {
+             throw new ValidationError("Please select a client to remove");
+         }
 
-        if(!updater || !ObjectId.isValid(updater)) {
-            throw new Error("Invalid updater ID");
-        }
+         if(!id || !ObjectId.isValid(id)) {
+             throw new ValidationError("Invalid trainer ID");
+         }
 
-        if(!ObjectId.isValid(body.member)) {
-            throw new Error("Invalid member ID");
-        }
+         const trainer = await TrainerManagementModel.getTrainer(new ObjectId(id));
 
-        const sanitize = {
-            updatedAt: new Date(),
-            updatedBy: new ObjectId(updater)
-        }
+         if(!trainer) {
+             throw new ValidationError("Trainer not found");
+         }
+         const clientId = new ObjectId(body.client_id);
 
-        return await TrainerManagementModel.removeMember(
-            new ObjectId(id),
-            new ObjectId(body.member),
-            sanitize
-        )
-    }
-}
+         const newTrainerclients = trainer.assignclient.filter(t => !t.equals(clientId));
+
+         if(!updater || !ObjectId.isValid(updater)) {
+             throw new ValidationError("Invalid updater ID");
+         }
+
+         if(!ObjectId.isValid(body.client)) {
+             throw new ValidationError("Invalid client ID");
+         }
+
+         const sanitize = {
+             assigned_clients: newTrainerclients,
+             updatedAt: new Date(),
+             updatedBy: new ObjectId(updater)
+         }
+
+         return await AuditLogsService.auditWrap({
+             action: "TRAINER_UPDATED",
+             entity: "trainers",
+             actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type },
+             meta: meta,
+             summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) removed a client to trainer ${trainer.first_name} ${trainer.last_name}`,
+             changes: {
+                 patch: {
+                     before: trainer.assigned_clients,
+                     after: newTrainerclients
+                 }
+             },
+             fn: async () => {
+                 return await TrainerManagementModel.removeclient(
+                     new ObjectId(id),
+                     new ObjectId(body.client),
+                     sanitize
+                 );
+             }
+         });
+
+     }
+
+     async updateOwnTrainerProfile(trainerId, body, updater, certificationValue = null) {
+         if(!trainerId || !ObjectId.isValid(trainerId)) {
+             throw new ValidationError("Invalid trainer ID");
+         }
+
+         if(!updater || !ObjectId.isValid(updater.id)) {
+             throw new ValidationError("Invalid updater ID");
+         }
+
+         // Ensure trainer can only update their own profile
+         if(updater.id.toString() !== trainerId.toString()) {
+             throw new ValidationError("Unauthorized: Can only update own profile");
+         }
+
+         const existingTrainer = await TrainerManagementModel.getTrainer(new ObjectId(trainerId));
+         if(!existingTrainer) {
+             throw new ValidationError("Trainer not found");
+         }
+
+          // Fields that a trainer can update in their own profile
+          const allowedFields = [
+              "first_name",
+              "last_name",
+              "phone",
+              "specialization",
+              "certification",
+              "rate",
+              "max_hours",
+              "bio",
+              "availability"
+          ];
+
+          const updateData = {};
+
+          for (const key of allowedFields) {
+              const value = body[key];
+              if(value !== undefined && value !== null) {
+                  if(key === "first_name" || key === "last_name" || key === "phone" || key === "bio") {
+                      updateData[key] = String(value).trim();
+                  } else if (key === "certification") {
+                      // Use provided certificationValue (from file upload) if present, else use string value
+                      updateData[key] = certificationValue || (body.certification ? String(body.certification).trim() : "");
+                  } else if (key === "specialization") {
+                      if(!Array.isArray(value)) {
+                          throw new ValidationError(`${key} must be an array`);
+                      }
+                      updateData[key] = value.map(v => String(v).trim().toLowerCase());
+                  } else if (key === "rate" || key === "max_hours") {
+                     const num = Number(value);
+                     if(Number.isNaN(num) || num < 0) {
+                         throw new ValidationError(`${key} must be a non-negative number`);
+                     }
+                     updateData[key] = num;
+                 } else if (key === "availability") {
+                     if(typeof value !== "object") {
+                         throw new ValidationError(`${key} must be an object`);
+                     }
+                     const existingAvailability = existingTrainer.availability || {};
+                     const sanitizedAvailability = { ...existingAvailability };
+
+                     if(value.days !== undefined) {
+                         sanitizedAvailability.days = Array.isArray(value.days)
+                             ? value.days.map(d => String(d).trim().toLowerCase())
+                             : [String(value.days).trim().toLowerCase()];
+                     }
+                     if(value.time_from !== undefined) {
+                         sanitizedAvailability.time_from = String(value.time_from).trim();
+                     }
+                     if(value.time_to !== undefined) {
+                         sanitizedAvailability.time_to = String(value.time_to).trim();
+                     }
+
+                     updateData[key] = sanitizedAvailability;
+                 }
+             }
+         }
+
+         // If a new certification file was uploaded, override with file URL
+         if (certificationValue) {
+             updateData.certification = certificationValue;
+         }
+
+         if(!Object.keys(updateData).length) {
+             throw new ValidationError("No valid fields to update");
+         }
+
+         const trainerUpdates = getChangedFields(existingTrainer, updateData);
+
+         if(Object.keys(trainerUpdates).length) {
+             trainerUpdates.updatedAt = new Date();
+             trainerUpdates.updatedBy = new ObjectId(updater.id);
+         }
+
+         return await AuditLogsService.auditWrap({
+             action: "TRAINER_UPDATED",
+             entity: "trainers",
+             entity_id: new ObjectId(trainerId),
+             actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type },
+             meta: {},
+             summary: `${updater.first_name} ${updater.last_name} updated their own trainer profile`,
+             changes: {
+                 patch: {
+                     before: existingTrainer,
+                     after: trainerUpdates
+                 }
+             },
+             fn: async () => {
+                 return await TrainerManagementModel.updateTrainerProfile(
+                     new ObjectId(trainerId),
+                     trainerUpdates
+                 );
+             }
+         });
+     }
+ }
+
 
 export default new TrainerService();

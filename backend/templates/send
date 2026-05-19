@@ -1,0 +1,21 @@
+/*
+
+
+
+return await AuditLogsService.auditWrap({
+            action: "EMAIL_client_REGISTRATION",
+            entity: "clients",
+            entity_id: client._id ?? null,
+            actor: { id: new ObjectId(updater.id), role: updater.role, user_type: updater.user_type }, 
+            meta: meta,
+            summary: `${updater.first_name} ${updater.last_name} (${updater.role} → ${updater.user_type}) has been sent a welcome email `,
+            fn: async () => {
+                return await sendEmail({
+                    to: client.email,
+                    subject: "6Pack Iron City - ",
+                    html: clientRegisteredEmail(client)
+                });
+            }
+        })
+
+*/

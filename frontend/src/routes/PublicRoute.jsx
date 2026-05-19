@@ -1,21 +1,26 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
 
 export default function PublicRoute() {
-    const { user, loading } = useAuth();
+    const { user, loading, progressCheck, isAuthenticated } = useAuth();
+    const location = useLocation();
 
     if(loading) return <LoadingSpinner />
 
-    if (user) {
-        const required = ["gender", "age", "height", "weight", "bmi", "fitness_goal"];
-        const incomplete = required.some(field => !user[field]);
-        if (incomplete && window.location.pathname !== "/postform") {
-            return <Navigate to="/postform" replace />;
+    if(isAuthenticated && user) {
+        if(user.user_type === "admin") {
+            return <Navigate to="/admin/dashboard" />
+        } else if(user.user_type === "client") {
+            return <Navigate to="/client/dashboard" />
+        } else if(user.user_type === "trainer") {
+            return <Navigate to="/trainer/dashboard" />
+        } else if(location.pathname === "/register") {
+            return <Navigate to="/client/membership" />
         }
-            
-        return <Navigate to="/member/dashboard" replace />;
+        return <Navigate to="/" /> 
     }
+        
 
     return <Outlet />;
 }

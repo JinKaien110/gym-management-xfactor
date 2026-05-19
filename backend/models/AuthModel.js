@@ -5,22 +5,22 @@ import { ObjectId } from "mongodb";
 class AuthModel {
 
     async FindUserById(UserId) {
-        const db = await connectDB();
-        const ID = await db.collection('members').findOne({ _id: new ObjectId(UserId) });
+        const { db } = await connectDB();
+        const ID = await db.collection('clients').findOne({ _id: new ObjectId(UserId) },
+    { projection: { password: 0 } });
 
         return ID;
     }
 
     async FindUserByEmail(email) {
-        const db = await connectDB();
-        const user = await db.collection('members').findOne({ email });
+        const { db } = await connectDB();
+        const user = await db.collection('clients').findOne({ email });
 
         return user;
     }
 
-    async ValidatePassword(UserEmail, InputPassword) {
-        const User = await this.FindUserByEmail(UserEmail);
-        return await bcrypt.compare(InputPassword, User.password);
+    async ValidatePassword(input, passwordhash) {
+        return await bcrypt.compare(input, passwordhash);
     }
 
 }
